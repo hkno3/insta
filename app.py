@@ -243,7 +243,8 @@ def make_image_clip(img_path: Path, clip_path: Path, duration: float,
             'ffmpeg', '-y', '-loop', '1', '-i', str(img_path),
             '-t', str(duration),
             '-vf', ','.join(filters),
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '2',
+            '-pix_fmt', 'yuv420p', '-r', '30',
             str(clip_path),
         ]
         return run_ffmpeg(cmd)
@@ -257,7 +258,8 @@ def make_image_clip(img_path: Path, clip_path: Path, duration: float,
         '-t', str(duration),
         '-filter_complex', ';'.join(fc),
         '-map', f'[{last}]',
-        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '2',
+        '-pix_fmt', 'yuv420p', '-r', '30',
         str(clip_path),
     ]
     return run_ffmpeg(cmd)
@@ -286,7 +288,8 @@ def make_video_clip(video_path: Path, clip_path: Path,
         cmd = [
             'ffmpeg', '-y', '-i', str(video_path),
             '-vf', vf, '-an',
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '2',
+            '-pix_fmt', 'yuv420p', '-r', '30',
             str(clip_path),
         ]
         return run_ffmpeg(cmd)
@@ -299,7 +302,8 @@ def make_video_clip(video_path: Path, clip_path: Path,
     cmd += [
         '-filter_complex', ';'.join(fc),
         '-map', f'[{last}]', '-an',
-        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '2',
+        '-pix_fmt', 'yuv420p', '-r', '30',
         str(clip_path),
     ]
     return run_ffmpeg(cmd)
