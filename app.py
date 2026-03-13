@@ -459,7 +459,8 @@ def add_audio_to_video(video_path: Path, output_path: Path,
                        bg_end: float = 0.0,
                        photo_music_list: list | None = None) -> tuple[bool, str]:
     """영상에 배경음악·효과음·사진별배경음 합성.
-    photo_music_list: [(path, start_sec, duration, volume), ...]"""
+    photo_music_list: [(path, start_sec, duration, volume, trim_start, trim_end), ...]
+    trim_start/trim_end: 0 means no trim (use full file)"""
     cmd = ['ffmpeg', '-y', '-i', str(video_path)]
     fc = []
     labels = []
@@ -489,11 +490,26 @@ def add_audio_to_video(video_path: Path, output_path: Path,
         labels.append(f'[{lbl}]')
         idx += 1
 
-    # 사진별 배경음: (path, start_sec, duration_sec, volume)
-    for pm_path, pm_start, pm_dur, pm_vol in (photo_music_list or []):
+    # 사진별 배경음: (path, start_sec, duration_sec, volume[, trim_start, trim_end])
+    _pm_seg_paths = []
+    for pm_entry in (photo_music_list or []):
+        pm_path, pm_start, pm_dur, pm_vol = pm_entry[:4]
+        pm_trim_start = float(pm_entry[4]) if len(pm_entry) > 4 else 0.0
+        pm_trim_end   = float(pm_entry[5]) if len(pm_entry) > 5 else 0.0
         delay_ms = int(pm_start * 1000)
-        cmd += ['-i', str(pm_path)]
         lbl = f'pm{idx}'
+        if pm_trim_start > 0 or pm_trim_end > 0:
+            # extract trimmed segment to temp file
+            _pm_seg = pm_path.parent / f'pm_seg_{idx}.aac'
+            seg_cmd = ['ffmpeg', '-y', '-i', str(pm_path), '-ss', f'{pm_trim_start:.3f}']
+            if pm_trim_end > pm_trim_start:
+                seg_cmd += ['-t', f'{(pm_trim_end - pm_trim_start):.3f}']
+            seg_cmd += ['-vn', '-c:a', 'aac', '-b:a', '128k', str(_pm_seg)]
+            run_ffmpeg(seg_cmd)
+            _pm_seg_paths.append(_pm_seg)
+            cmd += ['-i', str(_pm_seg)]
+        else:
+            cmd += ['-i', str(pm_path)]
         fc.append(
             f'[{idx}:a]atrim=end={pm_dur:.3f},asetpts=PTS-STARTPTS,'
             f'adelay={delay_ms}|{delay_ms},volume={pm_vol:.2f}[{lbl}]'
@@ -502,6 +518,8 @@ def add_audio_to_video(video_path: Path, output_path: Path,
         idx += 1
 
     if not labels:
+        for _ps in _pm_seg_paths:
+            if _ps.exists(): _ps.unlink(missing_ok=True)
         return True, ''
 
     if len(labels) == 1:
@@ -521,6 +539,9 @@ def add_audio_to_video(video_path: Path, output_path: Path,
 
     if _seg_path and _seg_path.exists():
         _seg_path.unlink(missing_ok=True)
+    for _ps in _pm_seg_paths:
+        if _ps.exists():
+            _ps.unlink(missing_ok=True)
 
     return ok, err
 
@@ -661,6 +682,8 @@ def create_video():
             pm_path = job_dir / f'{key}.{ext}'
             f.save(pm_path)
             pm_vol = float(request.form.get(f'photo_music_vol_{photo_idx}', 1.0))
+            pm_trim_start = float(request.form.get(f'photo_music_trim_start_{photo_idx}', 0.0))
+            pm_trim_end   = float(request.form.get(f'photo_music_trim_end_{photo_idx}',   0.0))
             if is_video(prepared[photo_idx]):
                 pm_dur = get_media_duration(prepared[photo_idx])
             elif photo_durations and photo_idx < len(photo_durations) and photo_durations[photo_idx]:
@@ -668,7 +691,7 @@ def create_video():
             else:
                 pm_dur = duration
             pm_start = start_times[photo_idx] if photo_idx < len(start_times) else 0.0
-            photo_music_list.append((pm_path, pm_start, pm_dur, pm_vol))
+            photo_music_list.append((pm_path, pm_start, pm_dur, pm_vol, pm_trim_start, pm_trim_end))
 
     # 오디오 합성
     if bg_path or sfx_list or photo_music_list:

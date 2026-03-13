@@ -469,6 +469,10 @@
     .photo-music-sel { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
     .photo-music-vol { width: 65px !important; height: 4px; }
     .photo-music-vol-lbl { font-size: .65rem; color: #4a90d9; font-weight: 700; min-width: 30px; }
+    .pm-trim-section { display: none; flex-direction: column; gap: 3px; padding: 4px 0 2px 0; }
+    .pm-trim-header { display: flex; align-items: center; justify-content: space-between; }
+    .pm-trim-label { font-size: .62rem; color: #888; font-weight: 600; }
+    .pm-trim-display { font-size: .62rem; color: #4a90d9; font-weight: 700; min-width: 70px; text-align: right; }
 
     /* ── 사진별 재생 시간 ── */
     .photo-dur-row {
@@ -823,8 +827,11 @@ let captionPositions   = [];   // [{x:0.5, y:0.88}, ...]
 let sfxFiles           = [];   // per-photo sound effect File or null
 let sfxPresets         = [];   // per-photo active preset id or null
 let durationsPerPhoto  = [];   // per-photo duration (images only; null = use global)
-let photoMusicFiles    = [];   // per-photo background music File or null
-let photoMusicVolumes  = [];   // per-photo background music volume (default 1.0)
+let photoMusicFiles       = [];   // per-photo background music File or null
+let photoMusicVolumes     = [];   // per-photo background music volume (default 1.0)
+let photoMusicTrimStarts  = [];   // per-photo trim start seconds
+let photoMusicTrimEnds    = [];   // per-photo trim end seconds (0 = no trim)
+let photoMusicDurations   = [];   // per-photo music file total duration
 let hasGenerated       = false;
 let isGenerating       = false;
 
@@ -1006,6 +1013,9 @@ function addFiles(files) {
     durationsPerPhoto.push(parseFloat(durationRange.value));
     photoMusicFiles.push(null);
     photoMusicVolumes.push(1.0);
+    photoMusicTrimStarts.push(0);
+    photoMusicTrimEnds.push(0);
+    photoMusicDurations.push(0);
   });
   renderPreviews();
 }
@@ -1018,6 +1028,9 @@ function removeFile(idx) {
   durationsPerPhoto.splice(idx, 1);
   photoMusicFiles.splice(idx, 1);
   photoMusicVolumes.splice(idx, 1);
+  photoMusicTrimStarts.splice(idx, 1);
+  photoMusicTrimEnds.splice(idx, 1);
+  photoMusicDurations.splice(idx, 1);
   renderPreviews();
   if (hasGenerated) scheduleRegen();
 }
@@ -1093,6 +1106,19 @@ function renderPreviews() {
             <span class="photo-music-vol-lbl">${Math.round((photoMusicVolumes[i] || 1) * 100)}%</span>
             <button class="sfx-clear-btn photo-music-clear" title="배경음 제거">✕</button>
           </div>
+          <div class="pm-trim-section">
+            <div class="pm-trim-header">
+              <span class="pm-trim-label">✂️ 구간</span>
+              <span class="pm-trim-display">0.0s – 끝</span>
+            </div>
+            <div class="dual-range-wrap">
+              <div class="dual-range-track">
+                <div class="dual-range-fill"></div>
+              </div>
+              <input type="range" class="pm-trim-start" min="0" max="100" step="0.1" value="0" />
+              <input type="range" class="pm-trim-end"   min="0" max="100" step="0.1" value="100" />
+            </div>
+          </div>
         </div>
         <div class="sfx-row">
           <div class="sfx-top">
@@ -1129,18 +1155,65 @@ function renderPreviews() {
     }
 
     // ── 사진별 배경음 ──
-    const pmInput    = item.querySelector('.photo-music-input');
-    const pmSel      = item.querySelector('.photo-music-sel');
-    const pmFname    = item.querySelector('.photo-music-fname');
-    const pmVol      = item.querySelector('.photo-music-vol');
-    const pmVolLbl   = item.querySelector('.photo-music-vol-lbl');
-    const pmClearBtn = item.querySelector('.photo-music-clear');
+    const pmInput      = item.querySelector('.photo-music-input');
+    const pmSel        = item.querySelector('.photo-music-sel');
+    const pmFname      = item.querySelector('.photo-music-fname');
+    const pmVol        = item.querySelector('.photo-music-vol');
+    const pmVolLbl     = item.querySelector('.photo-music-vol-lbl');
+    const pmClearBtn   = item.querySelector('.photo-music-clear');
+    const pmTrimSec    = item.querySelector('.pm-trim-section');
+    const pmTrimDisp   = item.querySelector('.pm-trim-display');
+    const pmTrimStart  = item.querySelector('.pm-trim-start');
+    const pmTrimEnd    = item.querySelector('.pm-trim-end');
+    const pmTrimFill   = item.querySelector('.pm-trim-section .dual-range-fill');
+
+    function pmUpdateTrimFill() {
+      const dur  = photoMusicDurations[i] || 100;
+      const s    = parseFloat(pmTrimStart.value);
+      const e    = parseFloat(pmTrimEnd.value);
+      const pct  = v => (v / dur * 100).toFixed(1);
+      pmTrimFill.style.left  = pct(s) + '%';
+      pmTrimFill.style.width = Math.max(0, pct(e) - pct(s)) + '%';
+      const endLabel = e >= dur - 0.05 ? '끝' : e.toFixed(1) + 's';
+      pmTrimDisp.textContent = s.toFixed(1) + 's – ' + endLabel;
+      photoMusicTrimStarts[i] = s;
+      photoMusicTrimEnds[i]   = e >= dur - 0.05 ? 0 : e;
+    }
+
+    function pmInitTrim(dur) {
+      photoMusicDurations[i] = dur;
+      pmTrimStart.max = dur; pmTrimStart.step = Math.max(0.1, dur / 1000);
+      pmTrimEnd.max   = dur; pmTrimEnd.step   = Math.max(0.1, dur / 1000);
+      // restore saved values or defaults
+      const s = photoMusicTrimStarts[i] || 0;
+      const e = photoMusicTrimEnds[i]   || dur;
+      pmTrimStart.value = s; pmTrimEnd.value = e;
+      pmUpdateTrimFill();
+      pmTrimSec.style.display = 'flex';
+    }
+
+    pmTrimStart.addEventListener('input', () => {
+      if (parseFloat(pmTrimStart.value) > parseFloat(pmTrimEnd.value) - 0.1)
+        pmTrimStart.value = Math.max(0, parseFloat(pmTrimEnd.value) - 0.1);
+      pmUpdateTrimFill();
+      if (hasGenerated) scheduleRegen();
+    });
+    pmTrimEnd.addEventListener('input', () => {
+      if (parseFloat(pmTrimEnd.value) < parseFloat(pmTrimStart.value) + 0.1)
+        pmTrimEnd.value = Math.min(photoMusicDurations[i], parseFloat(pmTrimStart.value) + 0.1);
+      pmUpdateTrimFill();
+      if (hasGenerated) scheduleRegen();
+    });
 
     pmInput.addEventListener('change', () => {
       const f = pmInput.files[0]; if (!f) return;
       photoMusicFiles[i] = f;
       pmFname.textContent = f.name;
       pmSel.style.display = 'flex';
+      // reset trim
+      photoMusicTrimStarts[i] = 0; photoMusicTrimEnds[i] = 0;
+      const tmpAudio = new Audio(URL.createObjectURL(f));
+      tmpAudio.addEventListener('loadedmetadata', () => pmInitTrim(tmpAudio.duration));
       if (hasGenerated) scheduleRegen();
     });
     pmVol.addEventListener('input', () => {
@@ -1153,6 +1226,8 @@ function renderPreviews() {
       e.preventDefault();
       photoMusicFiles[i] = null; pmInput.value = '';
       pmSel.style.display = 'none'; pmFname.textContent = '';
+      pmTrimSec.style.display = 'none';
+      photoMusicTrimStarts[i] = 0; photoMusicTrimEnds[i] = 0; photoMusicDurations[i] = 0;
       if (hasGenerated) scheduleRegen();
     });
     if (photoMusicFiles[i]) {
@@ -1160,6 +1235,7 @@ function renderPreviews() {
       pmVol.value = photoMusicVolumes[i];
       pmVolLbl.textContent = Math.round(photoMusicVolumes[i] * 100) + '%';
       pmSel.style.display = 'flex';
+      if (photoMusicDurations[i] > 0) pmInitTrim(photoMusicDurations[i]);
     }
 
     // ── 효과음 ──
@@ -1444,6 +1520,8 @@ function collectFormData() {
     if (f) {
       fd.append(`photo_music_${i}`, f);
       fd.append(`photo_music_vol_${i}`, (photoMusicVolumes[i] || 1.0).toFixed(2));
+      fd.append(`photo_music_trim_start_${i}`, (photoMusicTrimStarts[i] || 0).toFixed(3));
+      fd.append(`photo_music_trim_end_${i}`,   (photoMusicTrimEnds[i]   || 0).toFixed(3));
     }
   });
   return fd;
