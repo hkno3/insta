@@ -204,6 +204,31 @@
       padding: 0; cursor: pointer; background: none; flex-shrink: 0;
     }
 
+    /* ── 가로/1:1 포맷: 이미지 위, 컨트롤 아래 column 레이아웃 ── */
+    #preview-grid[data-format="landscape"] .preview-item,
+    #preview-grid[data-format="square"] .preview-item {
+      flex-direction: column;
+    }
+    #preview-grid[data-format="landscape"] .preview-img-wrap,
+    #preview-grid[data-format="square"] .preview-img-wrap {
+      width: 100%;
+      border-radius: 14px 14px 0 0;
+    }
+    #preview-grid[data-format="landscape"] .preview-controls,
+    #preview-grid[data-format="square"] .preview-controls {
+      border-left: none;
+      border-top: 1.5px solid #f0f0f0;
+      border-radius: 0 0 14px 14px;
+    }
+    #preview-grid[data-format="landscape"] .caption-input,
+    #preview-grid[data-format="square"] .caption-input {
+      border-radius: 0;
+    }
+    #preview-grid[data-format="landscape"] .sticker-area,
+    #preview-grid[data-format="square"] .sticker-area {
+      border-radius: 0 0 14px 14px;
+    }
+
     /* ── 자막 / 전환 ── */
     .caption-input {
       flex: 1;
@@ -870,6 +895,7 @@ document.getElementById('format-picker').addEventListener('click', e => {
   btn.classList.add('active');
   selectedFormat = btn.dataset.fmt;
   document.documentElement.style.setProperty('--preview-ratio', FORMAT_RATIOS[selectedFormat]);
+  previewGrid.dataset.format = selectedFormat;
   if (hasGenerated) scheduleRegen();
 });
 
@@ -879,6 +905,7 @@ const rightPanel     = document.getElementById('right-panel');
 const dropZone       = document.getElementById('drop-zone');
 const fileInput      = document.getElementById('file-input');
 const previewGrid    = document.getElementById('preview-grid');
+previewGrid.dataset.format = 'portrait';
 const previewSection = document.getElementById('preview-section');
 const createBtn      = document.getElementById('create-btn');
 const durationRange  = document.getElementById('duration-range');
