@@ -495,7 +495,8 @@ def create_video():
     )
 
     if not success:
-        return jsonify({'error': f'영상 생성 실패: {err_msg[:300] if err_msg else "ffmpeg 오류"}'}), 500
+        snippet = err_msg[-800:] if err_msg else "ffmpeg 오류"
+        return jsonify({'error': f'영상 생성 실패: {snippet}'}), 500
 
     return jsonify({'video_id': job_id})
 
