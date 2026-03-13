@@ -12,7 +12,7 @@
       background: linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #fda085 100%);
       min-height: 100vh;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
       padding: 24px;
     }
@@ -24,6 +24,21 @@
       width: 100%;
       max-width: 640px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+      transition: max-width 0.4s ease;
+    }
+    /* 좌우 분할 모드 */
+    .card.edit-mode {
+      max-width: 1180px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: start;
+    }
+    .left-panel { min-width: 0; }
+    .right-panel {
+      min-width: 0;
+      position: sticky;
+      top: 24px;
     }
 
     h1 {
@@ -35,7 +50,6 @@
       -webkit-text-fill-color: transparent;
       margin-bottom: 8px;
     }
-
     .subtitle {
       text-align: center;
       color: #888;
@@ -69,7 +83,6 @@
       gap: 12px;
       margin-bottom: 24px;
     }
-
     .preview-item {
       display: flex;
       flex-direction: column;
@@ -78,7 +91,6 @@
       box-shadow: 0 2px 10px rgba(0,0,0,0.12);
       background: #fff;
     }
-
     .preview-img-wrap {
       position: relative;
       aspect-ratio: 9/16;
@@ -276,9 +288,24 @@
     #create-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
     #create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    /* ── 우측 패널 ── */
+    .right-panel-inner {
+      background: #f9f9f9;
+      border-radius: 20px;
+      padding: 24px;
+    }
+    .right-panel-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
     /* ── 진행 상태 ── */
     #status {
-      margin-top: 20px;
       text-align: center;
       font-size: 0.9rem;
       color: #555;
@@ -304,18 +331,62 @@
       100% { width: 10%; }
     }
 
-    /* ── 미리보기 + 다운로드 ── */
-    #download-area {
-      display: none;
-      margin-top: 20px;
+    /* ── 영상 래퍼 + 오버레이 ── */
+    .video-wrap {
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #000;
+      margin-top: 14px;
     }
     #preview-video {
       width: 100%;
       max-height: 480px;
-      border-radius: 14px;
-      background: #000;
       display: block;
+    }
+    .video-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 10px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .video-overlay.show { display: flex; }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── 변경 감지 배너 ── */
+    #change-banner {
+      display: none;
+      background: #fff8e1;
+      border: 1.5px solid #fda085;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 0.82rem;
+      color: #c0392b;
+      font-weight: 600;
+      text-align: center;
       margin-bottom: 14px;
+    }
+
+    /* ── 다운로드 ── */
+    #download-area {
+      display: none;
+      margin-top: 14px;
+      text-align: center;
     }
     .dl-btn {
       display: inline-block;
@@ -329,10 +400,9 @@
       transition: opacity 0.2s;
     }
     .dl-btn:hover { opacity: 0.85; }
-    #download-area .hint { color: #888; font-size: 0.82rem; margin-top: 8px; text-align: center; }
+    #download-area .hint { color: #888; font-size: 0.82rem; margin-top: 8px; }
 
     .error-msg { color: #e74c3c; font-weight: 600; }
-
     .section-title {
       font-size: 0.82rem;
       font-weight: 700;
@@ -344,55 +414,71 @@
   </style>
 </head>
 <body>
-<div class="card">
-  <h1>📸 사진 → 인스타 영상</h1>
-  <p class="subtitle">사진을 올리면 1080×1920 (9:16) 세로 영상으로 만들어 드려요</p>
+<div class="card" id="main-card">
 
-  <!-- 업로드 존 -->
-  <div class="drop-zone" id="drop-zone">
-    <div class="icon">🖼️</div>
-    <p><span>클릭</span>하거나 사진을 여기에 드래그하세요</p>
-    <p style="font-size:0.8rem; color:#aaa; margin-top:6px;">JPG, PNG, WEBP 등 · 여러 장 동시 선택 가능</p>
-    <input type="file" id="file-input" accept="image/*" multiple />
-  </div>
+  <!-- ── 왼쪽 패널 ── -->
+  <div class="left-panel" id="left-panel">
+    <h1>📸 사진 → 인스타 영상</h1>
+    <p class="subtitle">사진을 올리면 1080×1920 (9:16) 세로 영상으로 만들어 드려요</p>
 
-  <!-- 미리보기 + 자막 입력 -->
-  <div id="preview-section" style="display:none; margin-bottom:24px;">
-    <p class="section-title">사진 순서 및 자막 입력</p>
-    <div id="preview-grid"></div>
-  </div>
+    <div class="drop-zone" id="drop-zone">
+      <div class="icon">🖼️</div>
+      <p><span>클릭</span>하거나 사진을 여기에 드래그하세요</p>
+      <p style="font-size:0.8rem; color:#aaa; margin-top:6px;">JPG, PNG, WEBP 등 · 여러 장 동시 선택 가능</p>
+      <input type="file" id="file-input" accept="image/*" multiple />
+    </div>
 
-  <!-- 설정 -->
-  <div class="settings">
-    <div class="setting-row">
-      <label>사진당 재생 시간</label>
-      <div class="control">
-        <input type="range" id="duration-range" min="1" max="10" step="0.5" value="3" />
-        <span id="duration-label">3초</span>
+    <div id="preview-section" style="display:none; margin-bottom:24px;">
+      <p class="section-title">사진 순서 및 자막 입력</p>
+      <div id="preview-grid"></div>
+    </div>
+
+    <div class="settings">
+      <div class="setting-row">
+        <label>사진당 재생 시간</label>
+        <div class="control">
+          <input type="range" id="duration-range" min="1" max="10" step="0.5" value="3" />
+          <span id="duration-label">3초</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>기본 전환 효과</label>
+        <div class="control">
+          <select id="transition-select"></select>
+        </div>
       </div>
     </div>
-    <div class="setting-row">
-      <label>기본 전환 효과</label>
-      <div class="control">
-        <select id="transition-select"></select>
+
+    <button id="create-btn" disabled>영상 만들기</button>
+  </div>
+
+  <!-- ── 오른쪽 패널 (최초 생성 후 표시) ── -->
+  <div class="right-panel" id="right-panel" style="display:none;">
+    <div class="right-panel-inner">
+      <p class="right-panel-title">🎬 미리보기</p>
+
+      <div id="change-banner">⚡ 설정이 변경됐어요 — 2초 후 재생성…</div>
+
+      <div id="status"></div>
+      <div class="progress-bar-wrap" id="progress-wrap">
+        <div class="progress-bar"></div>
+      </div>
+
+      <div class="video-wrap" id="video-wrap" style="display:none;">
+        <video id="preview-video" controls playsinline></video>
+        <div class="video-overlay" id="video-overlay">
+          <div class="spinner"></div>
+          <span>재생성 중…</span>
+        </div>
+      </div>
+
+      <div id="download-area">
+        <a id="download-link" class="dl-btn" href="#" download="instagram_video.mp4">⬇️ 영상 다운로드</a>
+        <p class="hint">설정을 바꾸면 자동으로 재생성돼요.</p>
       </div>
     </div>
   </div>
 
-  <button id="create-btn" disabled>영상 만들기</button>
-
-  <div id="status"></div>
-  <div class="progress-bar-wrap" id="progress-wrap">
-    <div class="progress-bar"></div>
-  </div>
-
-  <div id="download-area">
-    <video id="preview-video" controls playsinline></video>
-    <div style="text-align:center;">
-      <a id="download-link" class="dl-btn" href="#" download="instagram_video.mp4">⬇️ 영상 다운로드</a>
-    </div>
-    <p class="hint">자막이나 전환 효과를 바꾼 뒤 "영상 만들기"를 다시 누르면 새로 생성돼요.</p>
-  </div>
 </div>
 
 <script>
@@ -401,9 +487,6 @@
     '👍','🙌','💯','🎵','🌈','🌸','💫','🍀','🦋','🐾',
     '🍕','🎂','🛫','⚽','🎮','📸','💡','🔑','🌙','☀️',
   ];
-
-  // 사진별 스티커 목록 (각 항목: {emoji, x, y, size})
-  // 기본 배치 순환 좌표
   const DEFAULT_POSITIONS = [
     {x: 0.78, y: 0.05}, {x: 0.05, y: 0.05},
     {x: 0.78, y: 0.75}, {x: 0.05, y: 0.75},
@@ -451,15 +534,26 @@
     {v:'hblur',      label:'수평 블러 (가로 방향으로 흐려지며 전환)'},
   ];
 
-  const dropZone      = document.getElementById('drop-zone');
-  const fileInput     = document.getElementById('file-input');
-  const previewGrid   = document.getElementById('preview-grid');
+  const mainCard       = document.getElementById('main-card');
+  const rightPanel     = document.getElementById('right-panel');
+  const dropZone       = document.getElementById('drop-zone');
+  const fileInput      = document.getElementById('file-input');
+  const previewGrid    = document.getElementById('preview-grid');
   const previewSection = document.getElementById('preview-section');
-  const createBtn     = document.getElementById('create-btn');
-  const durationRange = document.getElementById('duration-range');
-  const durationLabel = document.getElementById('duration-label');
-  const transSelect   = document.getElementById('transition-select');
-  // 기본 전환 효과 select 옵션 채우기
+  const createBtn      = document.getElementById('create-btn');
+  const durationRange  = document.getElementById('duration-range');
+  const durationLabel  = document.getElementById('duration-label');
+  const transSelect    = document.getElementById('transition-select');
+  const statusEl       = document.getElementById('status');
+  const progressWrap   = document.getElementById('progress-wrap');
+  const downloadArea   = document.getElementById('download-area');
+  const downloadLink   = document.getElementById('download-link');
+  const previewVideo   = document.getElementById('preview-video');
+  const videoWrap      = document.getElementById('video-wrap');
+  const videoOverlay   = document.getElementById('video-overlay');
+  const changeBanner   = document.getElementById('change-banner');
+
+  // 전환 효과 옵션 채우기
   TRANSITIONS.forEach(t => {
     const opt = document.createElement('option');
     opt.value = t.v;
@@ -468,15 +562,12 @@
     transSelect.appendChild(opt);
   });
 
-  const statusEl      = document.getElementById('status');
-  const progressWrap  = document.getElementById('progress-wrap');
-  const downloadArea  = document.getElementById('download-area');
-  const downloadLink  = document.getElementById('download-link');
-  const previewVideo  = document.getElementById('preview-video');
-
   let selectedFiles = [];
+  let hasGenerated  = false;
+  let debounceTimer = null;
+  let isGenerating  = false;
 
-  // 드래그 앤 드롭
+  // ── 드래그 앤 드롭 ──
   dropZone.addEventListener('click', () => fileInput.click());
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
@@ -492,7 +583,6 @@
 
   function addFiles(files) {
     const imageFiles = files.filter(f => f.type.startsWith('image/'));
-    const startIdx = selectedFiles.length;
     selectedFiles = [...selectedFiles, ...imageFiles];
     for (let i = 0; i < imageFiles.length; i++) stickersPerPhoto.push([]);
     renderPreviews();
@@ -502,8 +592,10 @@
     selectedFiles.splice(index, 1);
     stickersPerPhoto.splice(index, 1);
     renderPreviews();
+    if (hasGenerated) scheduleRegen();
   }
 
+  // ── 스티커 렌더링 ──
   function renderStickerTags(container, photoIdx) {
     const tagsEl = container.querySelector('.sticker-tags');
     tagsEl.innerHTML = '';
@@ -514,6 +606,7 @@
       tag.querySelector('.del-sticker').addEventListener('click', () => {
         stickersPerPhoto[photoIdx].splice(si, 1);
         renderStickerTags(container, photoIdx);
+        if (hasGenerated) scheduleRegen();
       });
       tagsEl.appendChild(tag);
     });
@@ -543,18 +636,23 @@
       `;
       item.querySelector('.remove-btn').addEventListener('click', () => removeFile(i));
 
-      // 스티커 팔레트 토글
+      item.querySelector('.caption-input').addEventListener('input', () => {
+        if (hasGenerated) scheduleRegen();
+      });
+      item.querySelector('.trans-select').addEventListener('change', () => {
+        if (hasGenerated) scheduleRegen();
+      });
+
       const toggleBtn = item.querySelector('.sticker-toggle-btn');
       const palette   = item.querySelector('.sticker-palette');
       toggleBtn.addEventListener('click', () => palette.classList.toggle('open'));
-
-      // 이모지 클릭 → 스티커 추가
       palette.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
           const existing = stickersPerPhoto[i] || [];
           const pos = DEFAULT_POSITIONS[existing.length % DEFAULT_POSITIONS.length];
           stickersPerPhoto[i] = [...existing, {emoji: btn.textContent, x: pos.x, y: pos.y, size: 0.12}];
           renderStickerTags(item, i);
+          if (hasGenerated) scheduleRegen();
         });
       });
 
@@ -565,70 +663,104 @@
     const hasFiles = selectedFiles.length > 0;
     previewSection.style.display = hasFiles ? 'block' : 'none';
     createBtn.disabled = !hasFiles;
-    downloadArea.style.display = 'none';
-    statusEl.textContent = hasFiles ? `${selectedFiles.length}장 선택됨` : '';
-    statusEl.className = '';
+    if (!hasGenerated) {
+      statusEl.textContent = hasFiles ? `${selectedFiles.length}장 선택됨` : '';
+      statusEl.className = '';
+    }
   }
 
-  // 슬라이더
+  // ── 슬라이더 ──
   durationRange.addEventListener('input', () => {
     durationLabel.textContent = durationRange.value + '초';
+    if (hasGenerated) scheduleRegen();
   });
 
-  // 기본 전환 효과 변경 시 모든 카드 동기화
+  // ── 기본 전환 효과 변경 ──
   transSelect.addEventListener('change', () => {
     previewGrid.querySelectorAll('.trans-select').forEach(sel => {
       sel.value = transSelect.value;
     });
+    if (hasGenerated) scheduleRegen();
   });
 
-  // 영상 생성
-  createBtn.addEventListener('click', async () => {
-    if (selectedFiles.length === 0) return;
+  // ── 자동 재생성 (디바운스 2초) ──
+  function scheduleRegen() {
+    changeBanner.style.display = 'block';
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => generateVideo(true), 2000);
+  }
 
-    // 자막 및 전환 효과 수집
+  function collectFormData() {
     const captions = Array.from(previewGrid.querySelectorAll('.caption-input'))
       .map(el => el.value.trim());
     const transitions = Array.from(previewGrid.querySelectorAll('.trans-select'))
       .map(el => el.value);
+    const fd = new FormData();
+    selectedFiles.forEach(f => fd.append('photos', f));
+    fd.append('duration', durationRange.value);
+    fd.append('captions', JSON.stringify(captions));
+    fd.append('transitions', JSON.stringify(transitions));
+    fd.append('stickers', JSON.stringify(stickersPerPhoto));
+    return fd;
+  }
 
-    const formData = new FormData();
-    selectedFiles.forEach(f => formData.append('photos', f));
-    formData.append('duration', durationRange.value);
-    formData.append('captions', JSON.stringify(captions));
-    formData.append('transitions', JSON.stringify(transitions));
-    formData.append('stickers', JSON.stringify(stickersPerPhoto));
-
+  // ── 영상 생성 ──
+  async function generateVideo(isRegen = false) {
+    if (selectedFiles.length === 0 || isGenerating) return;
+    isGenerating = true;
     createBtn.disabled = true;
-    statusEl.textContent = '영상을 만드는 중입니다… 잠시만 기다려 주세요.';
-    statusEl.className = '';
-    progressWrap.style.display = 'block';
-    downloadArea.style.display = 'none';
+    changeBanner.style.display = 'none';
+
+    if (!isRegen) {
+      // 최초 생성: 우측 패널 열기
+      rightPanel.style.display = 'block';
+      mainCard.classList.add('edit-mode');
+      statusEl.textContent = '영상을 만드는 중입니다…';
+      statusEl.className = '';
+      progressWrap.style.display = 'block';
+      downloadArea.style.display = 'none';
+      videoWrap.style.display = 'none';
+    } else {
+      // 재생성: 비디오 위에 스피너 오버레이
+      videoOverlay.classList.add('show');
+      progressWrap.style.display = 'block';
+    }
 
     try {
-      const res = await fetch('/create', { method: 'POST', body: formData });
+      const res  = await fetch('/create', { method: 'POST', body: collectFormData() });
       const data = await res.json();
 
       if (!res.ok || data.error) {
         statusEl.textContent = '오류: ' + (data.error || '알 수 없는 오류');
         statusEl.className = 'error-msg';
       } else {
-        statusEl.textContent = '영상 생성 완료! 아래에서 미리보기 후 다운로드하세요.';
+        hasGenerated = true;
+        statusEl.textContent = isRegen ? '✅ 재생성 완료!' : '✅ 완료! 설정을 바꾸면 자동으로 다시 만들어드려요.';
+        statusEl.className = '';
         const vid = data.video_id;
         previewVideo.src = '/preview/' + vid + '?t=' + Date.now();
         previewVideo.load();
         previewVideo.play().catch(() => {});
         downloadLink.href = '/download/' + vid;
+        videoWrap.style.display = 'block';
         downloadArea.style.display = 'block';
-        downloadArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        createBtn.textContent = '다시 만들기';
       }
     } catch (err) {
       statusEl.textContent = '네트워크 오류가 발생했습니다.';
       statusEl.className = 'error-msg';
     } finally {
       progressWrap.style.display = 'none';
+      videoOverlay.classList.remove('show');
       createBtn.disabled = selectedFiles.length === 0;
+      isGenerating = false;
     }
+  }
+
+  // ── 영상 만들기 버튼 ──
+  createBtn.addEventListener('click', () => {
+    clearTimeout(debounceTimer);
+    generateVideo(hasGenerated);
   });
 </script>
 </body>
