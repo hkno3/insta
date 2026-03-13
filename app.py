@@ -27,6 +27,12 @@ VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 TRANS_DUR = 0.5  # 전환 효과 시간(초)
 
+FORMATS = {
+    'portrait':  (1080, 1920),   # 9:16 세로
+    'landscape': (1920, 1080),   # 16:9 가로
+    'square':    (1080, 1080),   # 1:1 정사각형
+}
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -84,7 +90,7 @@ def escape_drawtext(text: str) -> str:
     return text
 
 
-def build_caption_filter(text: str, font_size: int = 55) -> str:
+def build_caption_filter(text: str, height: int = VIDEO_HEIGHT, font_size: int = 55) -> str:
     if not text or not text.strip():
         return ''
     font_path = get_font_path()
@@ -93,7 +99,7 @@ def build_caption_filter(text: str, font_size: int = 55) -> str:
     if len(fp) >= 2 and fp[1] == ':':
         fp = fp[0] + '\\:' + fp[2:]
     font_part = f"fontfile='{fp}':" if fp else ''
-    y_pos = VIDEO_HEIGHT - font_size * 3
+    y_pos = height - font_size * 3
     return (
         f"drawtext={font_part}"
         f"text='{escaped}':"
@@ -105,11 +111,12 @@ def build_caption_filter(text: str, font_size: int = 55) -> str:
     )
 
 
-def prepare_image(src_path: Path, dst_path: Path):
+def prepare_image(src_path: Path, dst_path: Path,
+                  width: int = VIDEO_WIDTH, height: int = VIDEO_HEIGHT):
     from PIL import ImageOps
     img = ImageOps.exif_transpose(Image.open(src_path)).convert('RGB')
     src_w, src_h = img.size
-    target_ratio = VIDEO_WIDTH / VIDEO_HEIGHT
+    target_ratio = width / height
     src_ratio = src_w / src_h
 
     if src_ratio > target_ratio:
@@ -121,7 +128,7 @@ def prepare_image(src_path: Path, dst_path: Path):
         top = (src_h - new_h) // 2
         img = img.crop((0, top, src_w, top + new_h))
 
-    img = img.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.LANCZOS)
+    img = img.resize((width, height), Image.LANCZOS)
     img.save(dst_path, 'JPEG', quality=95)
 
 
@@ -178,14 +185,16 @@ def _build_valid_stickers(stickers):
     return valid
 
 
-def _sticker_filter_complex(valid: list, base_filter: str) -> tuple[list, str]:
+def _sticker_filter_complex(valid: list, base_filter: str,
+                             width: int = VIDEO_WIDTH,
+                             height: int = VIDEO_HEIGHT) -> tuple[list, str]:
     """filter_complex 문자열 구성. (fc_parts, last_label) 반환."""
     fc = [f'[0:v]{base_filter}[base]']
     prev = 'base'
     for idx, s in enumerate(valid):
-        size_px = max(40, int(float(s.get('size', 0.15)) * VIDEO_WIDTH))
-        x_px    = max(0, min(VIDEO_WIDTH  - size_px, int(float(s['x']) * VIDEO_WIDTH)))
-        y_px    = max(0, min(VIDEO_HEIGHT - size_px, int(float(s['y']) * VIDEO_HEIGHT)))
+        size_px = max(40, int(float(s.get('size', 0.15)) * width))
+        x_px    = max(0, min(width  - size_px, int(float(s['x']) * width)))
+        y_px    = max(0, min(height - size_px, int(float(s['y']) * height)))
         fc.append(f'[{idx+1}:v]scale={size_px}:{size_px}[s{idx}]')
         out = f'v{idx}'
         fc.append(f'[{prev}][s{idx}]overlay={x_px}:{y_px}[{out}]')
@@ -194,13 +203,15 @@ def _sticker_filter_complex(valid: list, base_filter: str) -> tuple[list, str]:
 
 
 def make_image_clip(img_path: Path, clip_path: Path, duration: float,
-                    caption: str = '', stickers: list | None = None) -> tuple[bool, str]:
+                    caption: str = '', stickers: list | None = None,
+                    width: int = VIDEO_WIDTH,
+                    height: int = VIDEO_HEIGHT) -> tuple[bool, str]:
     """이미지 → 클립."""
-    cap   = build_caption_filter(caption)
+    cap   = build_caption_filter(caption, height)
     valid = _build_valid_stickers(stickers)
 
     if not valid:
-        filters = [f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}']
+        filters = [f'scale={width}:{height}']
         if cap:
             filters.append(cap)
         cmd = [
@@ -215,8 +226,8 @@ def make_image_clip(img_path: Path, clip_path: Path, duration: float,
     cmd = ['ffmpeg', '-y', '-loop', '1', '-i', str(img_path)]
     for s in valid:
         cmd += ['-i', s['png']]
-    base = f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}' + (f',{cap}' if cap else '')
-    fc, last = _sticker_filter_complex(valid, base)
+    base = f'scale={width}:{height}' + (f',{cap}' if cap else '')
+    fc, last = _sticker_filter_complex(valid, base, width, height)
     cmd += [
         '-t', str(duration),
         '-filter_complex', ';'.join(fc),
@@ -228,14 +239,15 @@ def make_image_clip(img_path: Path, clip_path: Path, duration: float,
 
 
 def make_video_clip(video_path: Path, clip_path: Path,
-                    caption: str = '', stickers: list | None = None) -> tuple[bool, str]:
-    """동영상 → 클립 (9:16 크롭·리스케일, 자막·스티커 포함)."""
-    cap   = build_caption_filter(caption)
+                    caption: str = '', stickers: list | None = None,
+                    width: int = VIDEO_WIDTH,
+                    height: int = VIDEO_HEIGHT) -> tuple[bool, str]:
+    """동영상 → 클립 (비율 크롭·리스케일, 자막·스티커 포함)."""
+    cap   = build_caption_filter(caption, height)
     valid = _build_valid_stickers(stickers)
-    # 가로/세로 비율 유지하며 1080x1920 꽉 채우기 (crop)
-    scale_crop = (f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}'
+    scale_crop = (f'scale={width}:{height}'
                   f':force_original_aspect_ratio=increase,'
-                  f'crop={VIDEO_WIDTH}:{VIDEO_HEIGHT}')
+                  f'crop={width}:{height}')
 
     if not valid:
         vf = scale_crop + (f',{cap}' if cap else '')
@@ -251,7 +263,7 @@ def make_video_clip(video_path: Path, clip_path: Path,
     for s in valid:
         cmd += ['-i', s['png']]
     base = scale_crop + (f',{cap}' if cap else '')
-    fc, last = _sticker_filter_complex(valid, base)
+    fc, last = _sticker_filter_complex(valid, base, width, height)
     cmd += [
         '-filter_complex', ';'.join(fc),
         '-map', f'[{last}]', '-an',
@@ -262,10 +274,12 @@ def make_video_clip(video_path: Path, clip_path: Path,
 
 
 def make_clip(media_path: Path, clip_path: Path, duration: float,
-              caption: str = '', stickers: list | None = None) -> tuple[bool, str]:
+              caption: str = '', stickers: list | None = None,
+              width: int = VIDEO_WIDTH,
+              height: int = VIDEO_HEIGHT) -> tuple[bool, str]:
     if is_video(media_path):
-        return make_video_clip(media_path, clip_path, caption, stickers)
-    return make_image_clip(media_path, clip_path, duration, caption, stickers)
+        return make_video_clip(media_path, clip_path, caption, stickers, width, height)
+    return make_image_clip(media_path, clip_path, duration, caption, stickers, width, height)
 
 
 XFADE_TRANSITIONS = {
@@ -314,7 +328,9 @@ def merge_two_clips(clip_a: Path, clip_b: Path, output: Path,
 def make_video(media_paths: list[Path], output_path: Path,
                img_duration: float, transitions: list[str],
                captions: list[str] | None = None,
-               stickers_per_photo: list[list] | None = None) -> tuple[bool, str]:
+               stickers_per_photo: list[list] | None = None,
+               width: int = VIDEO_WIDTH,
+               height: int = VIDEO_HEIGHT) -> tuple[bool, str]:
     n = len(media_paths)
     if captions is None:
         captions = [''] * n
@@ -335,7 +351,7 @@ def make_video(media_paths: list[Path], output_path: Path,
     for i, (media, cap) in enumerate(zip(media_paths, captions)):
         clip = tmp_dir / f'clip_{i:03d}.mp4'
         dur  = get_media_duration(media) if is_video(media) else img_duration
-        ok, err = make_clip(media, clip, dur, cap, stickers_per_photo[i])
+        ok, err = make_clip(media, clip, dur, cap, stickers_per_photo[i], width, height)
         if not ok:
             _cleanup(tmp_dir)
             return False, err
@@ -383,6 +399,8 @@ def create_video():
     captions_json    = request.form.get('captions',    '[]')
     transitions_json = request.form.get('transitions', '[]')
     stickers_json    = request.form.get('stickers',    '[]')
+    fmt = request.form.get('format', 'portrait')
+    width, height = FORMATS.get(fmt, (VIDEO_WIDTH, VIDEO_HEIGHT))
 
     try:
         captions = json.loads(captions_json)
@@ -420,7 +438,7 @@ def create_video():
         else:
             prepared_path = job_dir / f'img_{i:03d}.jpg'
             try:
-                prepare_image(raw_path, prepared_path)
+                prepare_image(raw_path, prepared_path, width, height)
                 prepared.append(prepared_path)
             except Exception as e:
                 return jsonify({'error': f'이미지 처리 오류: {e}'}), 500
@@ -430,7 +448,7 @@ def create_video():
 
     output_path = OUTPUT_FOLDER / f'{job_id}.mp4'
     success, err_msg = make_video(
-        prepared, output_path, duration, transitions, captions, stickers_per_photo
+        prepared, output_path, duration, transitions, captions, stickers_per_photo, width, height
     )
 
     if not success:

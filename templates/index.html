@@ -35,7 +35,27 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       margin-bottom: 8px;
     }
-    .subtitle { text-align: center; color: #888; font-size: .9rem; margin-bottom: 32px; }
+    .subtitle { text-align: center; color: #888; font-size: .9rem; margin-bottom: 20px; }
+
+    /* ── 포맷 선택 버튼 ── */
+    .format-picker {
+      display: flex; justify-content: center; gap: 8px; margin-bottom: 28px;
+    }
+    .fmt-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 10px 16px; border: 2px solid #e0e0e0; border-radius: 14px;
+      background: #fff; cursor: pointer; transition: border-color .2s, background .2s;
+      min-width: 80px;
+    }
+    .fmt-btn:hover { border-color: #f5576c; background: #fff0f3; }
+    .fmt-btn.active { border-color: #f5576c; background: #fff0f3; }
+    .fmt-btn .fmt-icon {
+      display: flex; align-items: center; justify-content: center;
+      background: #f0f0f0; border-radius: 5px; transition: background .2s;
+    }
+    .fmt-btn.active .fmt-icon { background: #f5576c; }
+    .fmt-btn .fmt-label { font-size: .72rem; font-weight: 700; color: #555; }
+    .fmt-btn.active .fmt-label { color: #f5576c; }
 
     /* ── 업로드 존 ── */
     .drop-zone {
@@ -61,7 +81,7 @@
       box-shadow: 0 2px 10px rgba(0,0,0,.12);
     }
     .preview-img-wrap {
-      position: relative; aspect-ratio: 9/16; background: #000;
+      position: relative; aspect-ratio: var(--preview-ratio, 9/16); background: #000;
       border-radius: 12px 12px 0 0; overflow: hidden;
     }
     .preview-img-wrap img,
@@ -260,7 +280,23 @@
 
   <div class="left-panel" id="left-panel">
     <h1>📸 사진 → 인스타 영상</h1>
-    <p class="subtitle">사진을 올리면 1080×1920 (9:16) 세로 영상으로 만들어 드려요</p>
+    <p class="subtitle">원하는 포맷을 선택하고 사진·영상을 올려보세요</p>
+
+    <!-- 포맷 선택 -->
+    <div class="format-picker" id="format-picker">
+      <button class="fmt-btn active" data-fmt="portrait">
+        <span class="fmt-icon" style="width:28px;height:42px;"></span>
+        <span class="fmt-label">세로 9:16</span>
+      </button>
+      <button class="fmt-btn" data-fmt="landscape">
+        <span class="fmt-icon" style="width:48px;height:30px;"></span>
+        <span class="fmt-label">가로 16:9</span>
+      </button>
+      <button class="fmt-btn" data-fmt="square">
+        <span class="fmt-icon" style="width:36px;height:36px;"></span>
+        <span class="fmt-label">정사각 1:1</span>
+      </button>
+    </div>
 
     <div class="drop-zone" id="drop-zone">
       <div class="icon">🖼️</div>
@@ -399,6 +435,20 @@ const TRANSITIONS = [
   {v:'vdslice',    label:'세로 역슬라이스 (수직선 역방향 전환)'},
   {v:'hblur',      label:'수평 블러 (가로 방향으로 흐려지며 전환)'},
 ];
+
+/* ── 포맷 설정 ── */
+const FORMAT_RATIOS = { portrait: '9/16', landscape: '16/9', square: '1/1' };
+let selectedFormat = 'portrait';
+
+document.getElementById('format-picker').addEventListener('click', e => {
+  const btn = e.target.closest('.fmt-btn');
+  if (!btn) return;
+  document.querySelectorAll('.fmt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedFormat = btn.dataset.fmt;
+  document.documentElement.style.setProperty('--preview-ratio', FORMAT_RATIOS[selectedFormat]);
+  if (hasGenerated) scheduleRegen();
+});
 
 /* ── DOM 참조 ── */
 const mainCard       = document.getElementById('main-card');
@@ -720,6 +770,7 @@ function collectFormData() {
   fd.append('captions',    JSON.stringify(captions));
   fd.append('transitions', JSON.stringify(transitions));
   fd.append('stickers',    JSON.stringify(stickersPerPhoto));
+  fd.append('format',      selectedFormat);
   return fd;
 }
 
