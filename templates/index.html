@@ -492,60 +492,61 @@
     .photo-dur-label { font-size: .72rem; color: #f5576c; font-weight: 700; white-space: nowrap; padding-right: 8px; min-width: 30px; text-align: right; }
   /* ── RSS 카드 ── */
   #rss-section {
-    max-width: 1180px; margin: 0 auto 20px; padding: 0 20px;
-  }
-  #rss-section h2 {
-    font-size: .8rem; font-weight: 700; color: #aaa; text-transform: uppercase;
-    letter-spacing: .06em; margin-bottom: 10px;
+    margin: 0 -40px 20px; /* 카드 padding 상쇄 후 꽉 채움 */
+    padding: 0 40px;
+    overflow: hidden;
   }
   #rss-scroll-wrap {
     overflow-x: auto; overflow-y: hidden;
     scrollbar-width: thin; scrollbar-color: #e0e0e0 transparent;
+    padding-bottom: 6px;
   }
   #rss-scroll-wrap::-webkit-scrollbar { height: 4px; }
   #rss-scroll-wrap::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 2px; }
   #rss-cards {
-    display: flex; gap: 12px; padding-bottom: 6px;
+    display: flex; gap: 10px;
   }
   .rss-card {
-    flex: 0 0 200px; border-radius: 14px; overflow: hidden;
-    background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.07);
+    flex: 0 0 170px; border-radius: 12px; overflow: hidden;
+    background: #f9f9f9; border: 1px solid #ececec;
     text-decoration: none; color: inherit;
     transition: transform .15s, box-shadow .15s;
     display: flex; flex-direction: column;
   }
-  .rss-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+  .rss-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.10); }
   .rss-card-thumb {
     width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block;
-    background: #f0f0f0;
+    background: #ebebeb;
   }
   .rss-card-thumb-placeholder {
     width: 100%; aspect-ratio: 16/9; background: linear-gradient(135deg,#f5576c22,#fda08522);
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.8rem;
+    font-size: 1.6rem;
   }
-  .rss-card-body { padding: 10px 12px 12px; flex: 1; display: flex; flex-direction: column; gap: 5px; }
-  .rss-card-title { font-size: .78rem; font-weight: 700; color: #222; line-height: 1.35;
+  .rss-card-body { padding: 8px 10px 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .rss-card-title { font-size: .72rem; font-weight: 700; color: #222; line-height: 1.35;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .rss-card-desc { font-size: .68rem; color: #888; line-height: 1.4;
+  .rss-card-desc { font-size: .64rem; color: #888; line-height: 1.4;
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
   .rss-card-skeleton {
-    flex: 0 0 200px; border-radius: 14px; background: #f5f5f5;
-    height: 170px; animation: rss-shimmer 1.2s ease-in-out infinite;
+    flex: 0 0 170px; border-radius: 12px; background: #f0f0f0;
+    height: 160px; animation: rss-shimmer 1.2s ease-in-out infinite;
   }
   @keyframes rss-shimmer { 0%,100%{opacity:.5} 50%{opacity:1} }
   </style>
 </head>
 <body>
-<div id="rss-section">
-  <div id="rss-scroll-wrap">
-    <div id="rss-cards"></div>
-  </div>
-</div>
-
 <div class="card" id="main-card">
 
   <div class="left-panel" id="left-panel">
+
+    <!-- RSS 카드 -->
+    <div id="rss-section">
+      <div id="rss-scroll-wrap">
+        <div id="rss-cards"></div>
+      </div>
+    </div>
+
     <h1>📸 사진 → 인스타 영상</h1>
     <p class="subtitle">원하는 포맷을 선택하고 사진·영상을 올려보세요</p>
 
@@ -1802,7 +1803,7 @@ createBtn.addEventListener('click', () => {
     wrap.innerHTML = data.map(item => `
       <a class="rss-card" href="${item.link}" target="_blank" rel="noopener">
         ${item.thumb
-          ? `<img class="rss-card-thumb" src="${item.thumb}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'rss-card-thumb-placeholder',textContent:'📝'}))">`
+          ? `<img class="rss-card-thumb" src="/img-proxy?url=${encodeURIComponent(item.thumb)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'rss-card-thumb-placeholder',textContent:'📝'}))">`
           : `<div class="rss-card-thumb-placeholder">📝</div>`}
         <div class="rss-card-body">
           <div class="rss-card-title">${item.title}</div>

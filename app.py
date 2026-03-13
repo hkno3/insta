@@ -556,6 +556,22 @@ def _cleanup(tmp_dir: Path):
 
 RSS_URL = 'https://bodyandwell.com/feed'
 
+@app.route('/img-proxy')
+def img_proxy():
+    from flask import Response
+    url = request.args.get('url', '')
+    if not url or not url.startswith('http'):
+        return '', 400
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://bodyandwell.com/'})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            data = r.read()
+            ctype = r.headers.get('Content-Type', 'image/jpeg')
+        return Response(data, content_type=ctype)
+    except Exception:
+        return '', 404
+
+
 @app.route('/rss-feed')
 def rss_feed():
     try:
