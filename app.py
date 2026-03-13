@@ -122,7 +122,7 @@ def make_clip(img_path: Path, clip_path: Path, duration: float,
         '-r', '30',
         str(clip_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True)
     return result.returncode == 0
 
 
@@ -140,7 +140,7 @@ def concat_clips(clip_paths: list[Path], output_path: Path) -> bool:
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
         str(output_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True)
     concat_list.unlink(missing_ok=True)
     return result.returncode == 0
 
@@ -241,7 +241,7 @@ def _make_slide_video(image_paths, output_path, duration, captions):
             '-r', str(fps),
             str(merged),
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True)
         if result.returncode != 0:
             for c in clips:
                 c.unlink(missing_ok=True)
