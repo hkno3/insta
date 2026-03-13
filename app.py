@@ -426,47 +426,71 @@ def make_video(media_paths: list[Path], output_path: Path,
     return True, ''
 
 
-def add_background_music(video_path: Path, music_path: Path, output_path: Path,
-                          volume: float = 1.0,
-                          start_sec: float = 0.0,
-                          end_sec: float = 0.0) -> tuple[bool, str]:
-    """완성된 영상에 배경음악 추가.
-    start_sec: 음악 시작 위치(초). end_sec > start_sec이면 해당 구간만 반복.
-    음악이 영상보다 짧으면 반복, 길면 자름."""
-    has_end = end_sec > start_sec
+def compute_sfx_start_times(media_paths: list[Path], img_duration: float,
+                             transitions: list[str]) -> list[float]:
+    """각 클립의 최종 영상 내 시작 시간(초) 계산."""
+    starts = [0.0]
+    for i in range(len(media_paths) - 1):
+        dur = get_media_duration(media_paths[i]) if is_video(media_paths[i]) else img_duration
+        trans = transitions[i] if i < len(transitions) else 'none'
+        overlap = TRANS_DUR if trans != 'none' else 0.0
+        starts.append(starts[-1] + dur - overlap)
+    return starts
 
-    if has_end:
-        # 특정 구간을 잘라서 무한 반복
-        seg_dur = end_sec - start_sec
-        audio_filter = (
-            f'[1:a]atrim=start={start_sec:.2f}:end={end_sec:.2f},'
-            f'asetpts=PTS-STARTPTS,'
-            f'aloop=loop=-1:size=2147483647,'
-            f'volume={volume:.2f}[a]'
-        )
-        cmd = [
-            'ffmpeg', '-y',
-            '-i', str(video_path),
-            '-i', str(music_path),
-            '-filter_complex', audio_filter,
-            '-map', '0:v', '-map', '[a]',
-            '-shortest',
-            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
-            str(output_path),
-        ]
+
+def add_audio_to_video(video_path: Path, output_path: Path,
+                       sfx_list: list | None = None,
+                       bg_music: Path | None = None,
+                       bg_volume: float = 1.0,
+                       bg_start: float = 0.0,
+                       bg_end: float = 0.0) -> tuple[bool, str]:
+    """영상에 배경음악·효과음 합성.
+    sfx_list: [(audio_path, start_sec), ...] 각 효과음과 시작 시간.
+    bg_music: 배경음악 경로 (없으면 None).
+    bg_end > bg_start이면 해당 구간만 반복, 그렇지 않으면 bg_start부터 루프."""
+    cmd = ['ffmpeg', '-y', '-i', str(video_path)]
+    fc = []
+    labels = []
+    idx = 1
+
+    if bg_music:
+        if bg_end > bg_start:
+            cmd += ['-i', str(bg_music)]
+            fc.append(
+                f'[{idx}:a]atrim=start={bg_start:.2f}:end={bg_end:.2f},'
+                f'asetpts=PTS-STARTPTS,aloop=loop=-1:size=2147483647,'
+                f'volume={bg_volume:.2f}[bgm]'
+            )
+        else:
+            cmd += ['-stream_loop', '-1', '-ss', f'{bg_start:.2f}', '-i', str(bg_music)]
+            fc.append(f'[{idx}:a]volume={bg_volume:.2f}[bgm]')
+        labels.append('[bgm]')
+        idx += 1
+
+    for sfx_path, start_sec in (sfx_list or []):
+        delay_ms = int(start_sec * 1000)
+        cmd += ['-i', str(sfx_path)]
+        lbl = f'sfx{idx}'
+        fc.append(f'[{idx}:a]adelay={delay_ms}|{delay_ms}[{lbl}]')
+        labels.append(f'[{lbl}]')
+        idx += 1
+
+    if not labels:
+        return True, ''
+
+    if len(labels) == 1:
+        out_label = labels[0].strip('[]')
     else:
-        # 시작 위치만 지정, 음악이 짧으면 반복
-        audio_filter = f'[1:a]volume={volume:.2f}[a]'
-        cmd = [
-            'ffmpeg', '-y',
-            '-i', str(video_path),
-            '-stream_loop', '-1', '-ss', f'{start_sec:.2f}', '-i', str(music_path),
-            '-filter_complex', audio_filter,
-            '-map', '0:v', '-map', '[a]',
-            '-shortest',
-            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
-            str(output_path),
-        ]
+        out_label = 'aout'
+        fc.append(f'{"".join(labels)}amix=inputs={len(labels)}:normalize=0[{out_label}]')
+
+    cmd += [
+        '-filter_complex', ';'.join(fc),
+        '-map', '0:v', '-map', f'[{out_label}]',
+        '-shortest',
+        '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+        str(output_path),
+    ]
     return run_ffmpeg(cmd)
 
 
@@ -554,20 +578,44 @@ def create_video():
         snippet = err_msg[-800:] if err_msg else "ffmpeg 오류"
         return jsonify({'error': f'영상 생성 실패: {snippet}'}), 500
 
-    # 배경음악 처리
+    # 배경음악 저장
+    bg_path = None
     if music_file and music_file.filename:
         music_ext = music_file.filename.rsplit('.', 1)[-1].lower()
         if music_ext in AUDIO_EXTENSIONS:
-            music_path = job_dir / f'music.{music_ext}'
-            music_file.save(music_path)
-            output_path = OUTPUT_FOLDER / f'{job_id}_final.mp4'
-            ok, err = add_background_music(video_path, music_path, output_path,
-                                           music_volume, music_start, music_end)
-            if ok:
-                video_path.unlink(missing_ok=True)
-                output_path.rename(video_path)
-            else:
-                app.logger.warning(f'배경음악 추가 실패, 음악 없이 반환: {err[-300:]}')
+            bg_path = job_dir / f'music.{music_ext}'
+            music_file.save(bg_path)
+
+    # 효과음 수집
+    sfx_list = []
+    sfx_keys = [k for k in request.files if k.startswith('sfx_')]
+    if sfx_keys:
+        start_times = compute_sfx_start_times(prepared, duration, transitions)
+        for key in sfx_keys:
+            try:
+                photo_idx = int(key.split('_', 1)[1])
+            except ValueError:
+                continue
+            f = request.files[key]
+            if not f.filename or photo_idx >= len(prepared):
+                continue
+            ext = f.filename.rsplit('.', 1)[-1].lower()
+            if ext in AUDIO_EXTENSIONS:
+                sfx_path = job_dir / f'{key}.{ext}'
+                f.save(sfx_path)
+                t = start_times[photo_idx] if photo_idx < len(start_times) else 0.0
+                sfx_list.append((sfx_path, t))
+
+    # 오디오 합성
+    if bg_path or sfx_list:
+        audio_out = OUTPUT_FOLDER / f'{job_id}_audio.mp4'
+        ok, err = add_audio_to_video(video_path, audio_out, sfx_list,
+                                     bg_path, music_volume, music_start, music_end)
+        if ok:
+            video_path.unlink(missing_ok=True)
+            audio_out.rename(video_path)
+        else:
+            app.logger.warning(f'오디오 추가 실패, 음소거로 반환: {err[-300:]}')
 
     return jsonify({'video_id': job_id})
 

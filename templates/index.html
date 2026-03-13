@@ -419,6 +419,29 @@
       display: flex; justify-content: space-between;
       font-size: .72rem; color: #aaa;
     }
+
+    /* ── 효과음 행 ── */
+    .sfx-row {
+      display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+      border-bottom: 1.5px solid #f0f0f0; background: #fafafa; flex-wrap: wrap;
+    }
+    .sfx-label { font-size: .68rem; color: #aaa; font-weight: 700; white-space: nowrap; }
+    .sfx-upload-label {
+      cursor: pointer; font-size: .7rem; color: #f5576c; font-weight: 700;
+      border: 1px solid #f5576c; border-radius: 10px; padding: 2px 8px;
+      white-space: nowrap; user-select: none;
+    }
+    .sfx-upload-label:hover { background: #fff0f3; }
+    .sfx-selected { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+    .sfx-fname {
+      font-size: .68rem; color: #555; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; max-width: 100px;
+    }
+    .sfx-clear-btn {
+      background: none; border: none; cursor: pointer; color: #aaa;
+      font-size: .8rem; padding: 0 2px; line-height: 1; flex-shrink: 0;
+    }
+    .sfx-clear-btn:hover { color: #f5576c; }
   </style>
 </head>
 <body>
@@ -661,6 +684,7 @@ TRANSITIONS.forEach(t => {
 let selectedFiles      = [];
 let stickersPerPhoto   = [];
 let captionPositions   = [];   // [{x:0.5, y:0.88}, ...]
+let sfxFiles           = [];   // per-photo sound effect File or null
 let hasGenerated       = false;
 let debounceTimer      = null;
 let isGenerating       = false;
@@ -835,13 +859,18 @@ const ACCEPTED = f => f.type.startsWith('image/') || f.type.startsWith('video/')
 function addFiles(files) {
   const valid = files.filter(ACCEPTED);
   selectedFiles = [...selectedFiles, ...valid];
-  valid.forEach(() => { stickersPerPhoto.push([]); captionPositions.push({x:0.5, y:0.88}); });
+  valid.forEach(() => {
+    stickersPerPhoto.push([]);
+    captionPositions.push({x:0.5, y:0.88});
+    sfxFiles.push(null);
+  });
   renderPreviews();
 }
 function removeFile(idx) {
   selectedFiles.splice(idx, 1);
   stickersPerPhoto.splice(idx, 1);
   captionPositions.splice(idx, 1);
+  sfxFiles.splice(idx, 1);
   renderPreviews();
   if (hasGenerated) scheduleRegen();
 }
@@ -901,6 +930,16 @@ function renderPreviews() {
             ${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===dt?' selected':''}>${t.label}</option>`).join('')}
           </select>
         </div>
+        <div class="sfx-row">
+          <span class="sfx-label">🔊 효과음</span>
+          <label class="sfx-upload-label">파일 선택
+            <input type="file" class="sfx-file-input" accept="audio/*" style="display:none" />
+          </label>
+          <div class="sfx-selected" style="display:none">
+            <span class="sfx-fname"></span>
+            <button class="sfx-clear-btn" title="효과음 제거">✕</button>
+          </div>
+        </div>
         <div class="sticker-area">
           <span class="sticker-area-label">🎨 스티커</span>
           <div class="sticker-panel">${buildPaletteHTML()}</div>
@@ -910,6 +949,33 @@ function renderPreviews() {
 
     item.querySelector('.remove-photo-btn').addEventListener('click', () => removeFile(i));
     item.querySelector('.trans-select').addEventListener('change', () => { if (hasGenerated) scheduleRegen(); });
+
+    // ── 효과음 ──
+    const sfxInput    = item.querySelector('.sfx-file-input');
+    const sfxSelected = item.querySelector('.sfx-selected');
+    const sfxFname    = item.querySelector('.sfx-fname');
+    const sfxClearBtn = item.querySelector('.sfx-clear-btn');
+    sfxInput.addEventListener('change', () => {
+      const f = sfxInput.files[0];
+      if (!f) return;
+      sfxFiles[i] = f;
+      sfxFname.textContent = f.name;
+      sfxSelected.style.display = '';
+      if (hasGenerated) scheduleRegen();
+    });
+    sfxClearBtn.addEventListener('click', e => {
+      e.preventDefault();
+      sfxFiles[i] = null;
+      sfxInput.value = '';
+      sfxSelected.style.display = 'none';
+      sfxFname.textContent = '';
+      if (hasGenerated) scheduleRegen();
+    });
+    // 이미 선택된 파일 복원 (renderPreviews 재호출 시)
+    if (sfxFiles[i]) {
+      sfxFname.textContent = sfxFiles[i].name;
+      sfxSelected.style.display = '';
+    }
 
     // ── 자막 미리보기 오버레이 업데이트 ──
     const captionOverlay  = item.querySelector('.caption-overlay');
@@ -1114,6 +1180,7 @@ function collectFormData() {
     fd.append('music_start',  musicStartSec.toFixed(2));
     fd.append('music_end',    musicEndSec > 0 ? musicEndSec.toFixed(2) : '');
   }
+  sfxFiles.forEach((f, i) => { if (f) fd.append(`sfx_${i}`, f); });
   return fd;
 }
 
@@ -1209,8 +1276,8 @@ musicInput.addEventListener('change', () => {
   musicText.classList.add('selected');
   musicUploadArea.classList.add('has-file');
   musicClearBtn.style.display = '';
-  musicVolumeRow.style.display = '';
-  musicTrimRow.style.display = '';
+  musicVolumeRow.style.display = 'block';
+  musicTrimRow.style.display = 'block';
   // 오디오 길이 읽기
   const tmp = new Audio(URL.createObjectURL(file));
   tmp.addEventListener('loadedmetadata', () => {
