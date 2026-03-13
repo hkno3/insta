@@ -422,24 +422,34 @@
 
     /* ── 효과음 행 ── */
     .sfx-row {
-      display: flex; align-items: center; gap: 6px; padding: 5px 10px;
-      border-bottom: 1.5px solid #f0f0f0; background: #fafafa; flex-wrap: wrap;
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 6px 10px; border-bottom: 1.5px solid #f0f0f0; background: #fafafa;
     }
-    .sfx-label { font-size: .68rem; color: #aaa; font-weight: 700; white-space: nowrap; }
-    .sfx-upload-label {
-      cursor: pointer; font-size: .7rem; color: #f5576c; font-weight: 700;
-      border: 1px solid #f5576c; border-radius: 10px; padding: 2px 8px;
+    .sfx-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .sfx-label { font-size: .68rem; color: #aaa; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+    .sfx-btn-group { display: flex; gap: 3px; flex-wrap: wrap; align-items: center; flex: 1; }
+    .sfx-preset-btn {
+      background: none; border: 1.5px solid #eee; border-radius: 7px;
+      padding: 2px 5px; cursor: pointer; font-size: .9rem; line-height: 1.3;
+      display: flex; align-items: center; gap: 2px;
+      transition: background .12s, border-color .12s;
+    }
+    .sfx-preset-btn:hover { background: #fff0f3; border-color: #f5576c; }
+    .sfx-preset-btn.active { background: #fff0f3; border-color: #f5576c; }
+    .sfx-btn-lbl { font-size: .6rem; color: #888; }
+    .sfx-preset-btn.active .sfx-btn-lbl { color: #f5576c; }
+    .sfx-file-label {
+      cursor: pointer; border: 1.5px solid #ddd; border-radius: 7px;
+      padding: 2px 6px; font-size: .68rem; color: #aaa;
       white-space: nowrap; user-select: none;
+      transition: border-color .12s, color .12s;
     }
-    .sfx-upload-label:hover { background: #fff0f3; }
-    .sfx-selected { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
-    .sfx-fname {
-      font-size: .68rem; color: #555; overflow: hidden; text-overflow: ellipsis;
-      white-space: nowrap; max-width: 100px;
-    }
+    .sfx-file-label:hover { border-color: #f5576c; color: #f5576c; }
+    .sfx-selected { display: flex; align-items: center; gap: 4px; }
+    .sfx-fname { font-size: .68rem; color: #f5576c; font-weight: 700; }
     .sfx-clear-btn {
       background: none; border: none; cursor: pointer; color: #aaa;
-      font-size: .8rem; padding: 0 2px; line-height: 1; flex-shrink: 0;
+      font-size: .8rem; padding: 0 2px; line-height: 1;
     }
     .sfx-clear-btn:hover { color: #f5576c; }
   </style>
@@ -639,6 +649,105 @@ const TRANSITIONS = [
   {v:'hblur',      label:'수평 블러 (가로 방향으로 흐려지며 전환)'},
 ];
 
+/* ── 효과음 프리셋 ── */
+const SFX_PRESETS = [
+  { id: 'ding',   emoji: '🔔', label: '띵'   },
+  { id: 'alert',  emoji: '🚨', label: '알림'  },
+  { id: 'coin',   emoji: '🪙', label: '코인'  },
+  { id: 'boing',  emoji: '🎈', label: '뿅'   },
+  { id: 'boom',   emoji: '💥', label: '쿵'   },
+  { id: 'whoosh', emoji: '💨', label: '쉬익'  },
+  { id: 'clap',   emoji: '👏', label: '짝'   },
+  { id: 'drum',   emoji: '🥁', label: '드럼'  },
+  { id: 'click',  emoji: '📸', label: '딸깍'  },
+  { id: 'heart',  emoji: '💝', label: '하트'  },
+];
+
+function audioBufferToWav(buffer) {
+  const numCh = buffer.numberOfChannels, sr = buffer.sampleRate, len = buffer.length;
+  const pcmLen = len * numCh * 2;
+  const ab = new ArrayBuffer(44 + pcmLen);
+  const v  = new DataView(ab);
+  const ws = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+  ws(0,'RIFF'); v.setUint32(4, 36 + pcmLen, true); ws(8,'WAVE'); ws(12,'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, numCh, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * numCh * 2, true);
+  v.setUint16(32, numCh * 2, true); v.setUint16(34, 16, true);
+  ws(36,'data'); v.setUint32(40, pcmLen, true);
+  let off = 44;
+  for (let i = 0; i < len; i++) for (let c = 0; c < numCh; c++) {
+    const s = Math.max(-1, Math.min(1, buffer.getChannelData(c)[i]));
+    v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true); off += 2;
+  }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+
+async function generateSfxBlob(type) {
+  const SR  = 44100;
+  const DUR = { boom:0.8, whoosh:0.8, coin:0.6, clap:0.3, click:0.1, heart:0.5 };
+  const dur = DUR[type] || 0.5;
+  const ctx = new OfflineAudioContext(1, Math.ceil(SR * dur), SR);
+  const mg  = ctx.createGain(); mg.gain.value = 0.85; mg.connect(ctx.destination);
+  const mkNoise = d => {
+    const buf = ctx.createBuffer(1, Math.ceil(SR * d), SR);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf; return src;
+  };
+  const osc = (freq, type2, start, stop, g0, g1, freqEnd) => {
+    const o = ctx.createOscillator(); o.type = type2;
+    o.frequency.setValueAtTime(freq, start);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, stop);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(g0, start); g.gain.exponentialRampToValueAtTime(0.001, stop);
+    o.connect(g); g.connect(mg); o.start(start); o.stop(stop);
+  };
+  switch (type) {
+    case 'ding':   osc(880,'sine',0,0.5,0.8,0.001,440); break;
+    case 'alert':
+      [0,0.15].forEach((t,idx) => osc(idx?660:440,'square',t,t+0.12,0.4,0.001));
+      break;
+    case 'coin':
+      [523,659,784,1046].forEach((f,idx) => osc(f,'square',idx*0.12,idx*0.12+0.12,0.35,0.001));
+      break;
+    case 'boing':  osc(800,'sine',0,0.5,0.7,0.001,80); break;
+    case 'boom': {
+      osc(150,'sine',0,0.8,0.8,0.001,40);
+      const n=mkNoise(0.8), f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=200;
+      const g=ctx.createGain(); g.gain.setValueAtTime(0.5,0); g.gain.exponentialRampToValueAtTime(0.001,0.3);
+      n.connect(f); f.connect(g); g.connect(mg); n.start(0); n.stop(0.8); break;
+    }
+    case 'whoosh': {
+      const n=mkNoise(0.8), f=ctx.createBiquadFilter(); f.type='bandpass'; f.Q.value=1;
+      f.frequency.setValueAtTime(200,0); f.frequency.exponentialRampToValueAtTime(4000,0.6);
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,0); g.gain.linearRampToValueAtTime(0.8,0.1);
+      g.gain.exponentialRampToValueAtTime(0.001,0.8);
+      n.connect(f); f.connect(g); g.connect(mg); n.start(0); n.stop(0.8); break;
+    }
+    case 'clap': {
+      const n=mkNoise(0.3), f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=1000;
+      const g=ctx.createGain(); g.gain.setValueAtTime(0.9,0); g.gain.exponentialRampToValueAtTime(0.001,0.3);
+      n.connect(f); f.connect(g); g.connect(mg); n.start(0); n.stop(0.3); break;
+    }
+    case 'drum': {
+      osc(200,'sine',0,0.5,0.9,0.001,50);
+      const n=mkNoise(0.1), f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=300;
+      const g=ctx.createGain(); g.gain.setValueAtTime(0.5,0); g.gain.exponentialRampToValueAtTime(0.001,0.1);
+      n.connect(f); f.connect(g); g.connect(mg); n.start(0); n.stop(0.1); break;
+    }
+    case 'click': {
+      const n=mkNoise(0.05), f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=3000;
+      const g=ctx.createGain(); g.gain.setValueAtTime(0.9,0); g.gain.exponentialRampToValueAtTime(0.001,0.05);
+      n.connect(f); f.connect(g); g.connect(mg); n.start(0); n.stop(0.05); break;
+    }
+    case 'heart':
+      [0,0.25].forEach(t => osc(440,'sine',t,t+0.2,0.6,0.001));
+      break;
+  }
+  const rendered = await ctx.startRendering();
+  return audioBufferToWav(rendered);
+}
+
 /* ── 포맷 설정 ── */
 const FORMAT_RATIOS = { portrait: '9/16', landscape: '16/9', square: '1/1' };
 let selectedFormat = 'portrait';
@@ -685,6 +794,7 @@ let selectedFiles      = [];
 let stickersPerPhoto   = [];
 let captionPositions   = [];   // [{x:0.5, y:0.88}, ...]
 let sfxFiles           = [];   // per-photo sound effect File or null
+let sfxPresets         = [];   // per-photo active preset id or null
 let hasGenerated       = false;
 let debounceTimer      = null;
 let isGenerating       = false;
@@ -863,6 +973,7 @@ function addFiles(files) {
     stickersPerPhoto.push([]);
     captionPositions.push({x:0.5, y:0.88});
     sfxFiles.push(null);
+    sfxPresets.push(null);
   });
   renderPreviews();
 }
@@ -871,6 +982,7 @@ function removeFile(idx) {
   stickersPerPhoto.splice(idx, 1);
   captionPositions.splice(idx, 1);
   sfxFiles.splice(idx, 1);
+  sfxPresets.splice(idx, 1);
   renderPreviews();
   if (hasGenerated) scheduleRegen();
 }
@@ -931,10 +1043,13 @@ function renderPreviews() {
           </select>
         </div>
         <div class="sfx-row">
-          <span class="sfx-label">🔊 효과음</span>
-          <label class="sfx-upload-label">파일 선택
-            <input type="file" class="sfx-file-input" accept="audio/*" style="display:none" />
-          </label>
+          <div class="sfx-top">
+            <span class="sfx-label">🔊 효과음</span>
+            <div class="sfx-btn-group">
+              ${SFX_PRESETS.map(p=>`<button class="sfx-preset-btn" data-sfx="${p.id}">${p.emoji}<span class="sfx-btn-lbl">${p.label}</span></button>`).join('')}
+              <label class="sfx-file-label">📂<input type="file" class="sfx-file-input" accept="audio/*" style="display:none" /></label>
+            </div>
+          </div>
           <div class="sfx-selected" style="display:none">
             <span class="sfx-fname"></span>
             <button class="sfx-clear-btn" title="효과음 제거">✕</button>
@@ -955,26 +1070,62 @@ function renderPreviews() {
     const sfxSelected = item.querySelector('.sfx-selected');
     const sfxFname    = item.querySelector('.sfx-fname');
     const sfxClearBtn = item.querySelector('.sfx-clear-btn');
+    const presetBtns  = item.querySelectorAll('.sfx-preset-btn');
+
+    function clearSfxState() {
+      sfxFiles[i] = null; sfxPresets[i] = null;
+      sfxInput.value = '';
+      sfxFname.textContent = '';
+      sfxSelected.style.display = 'none';
+      presetBtns.forEach(b => b.classList.remove('active'));
+    }
+
     sfxInput.addEventListener('change', () => {
       const f = sfxInput.files[0];
       if (!f) return;
+      presetBtns.forEach(b => b.classList.remove('active'));
+      sfxPresets[i] = null;
       sfxFiles[i] = f;
       sfxFname.textContent = f.name;
-      sfxSelected.style.display = '';
+      sfxSelected.style.display = 'flex';
       if (hasGenerated) scheduleRegen();
     });
+
+    presetBtns.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const sfxId = btn.dataset.sfx;
+        if (sfxPresets[i] === sfxId) { clearSfxState(); if (hasGenerated) scheduleRegen(); return; }
+        presetBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        sfxPresets[i] = sfxId;
+        sfxFname.textContent = '생성 중…';
+        sfxSelected.style.display = 'flex';
+        try {
+          const blob   = await generateSfxBlob(sfxId);
+          const preset = SFX_PRESETS.find(p => p.id === sfxId);
+          sfxFiles[i]  = new File([blob], `sfx_${sfxId}.wav`, { type: 'audio/wav' });
+          sfxFname.textContent = preset ? `${preset.emoji} ${preset.label}` : sfxId;
+          if (hasGenerated) scheduleRegen();
+        } catch(e) { sfxFname.textContent = '오류'; console.error(e); }
+      });
+    });
+
     sfxClearBtn.addEventListener('click', e => {
       e.preventDefault();
-      sfxFiles[i] = null;
-      sfxInput.value = '';
-      sfxSelected.style.display = 'none';
-      sfxFname.textContent = '';
+      clearSfxState();
       if (hasGenerated) scheduleRegen();
     });
-    // 이미 선택된 파일 복원 (renderPreviews 재호출 시)
-    if (sfxFiles[i]) {
+
+    // 이미 선택된 파일/프리셋 복원 (renderPreviews 재호출 시)
+    if (sfxPresets[i]) {
+      const activeBtn = item.querySelector(`.sfx-preset-btn[data-sfx="${sfxPresets[i]}"]`);
+      if (activeBtn) activeBtn.classList.add('active');
+      const preset = SFX_PRESETS.find(p => p.id === sfxPresets[i]);
+      sfxFname.textContent = preset ? `${preset.emoji} ${preset.label}` : sfxPresets[i];
+      sfxSelected.style.display = 'flex';
+    } else if (sfxFiles[i]) {
       sfxFname.textContent = sfxFiles[i].name;
-      sfxSelected.style.display = '';
+      sfxSelected.style.display = 'flex';
     }
 
     // ── 자막 미리보기 오버레이 업데이트 ──
