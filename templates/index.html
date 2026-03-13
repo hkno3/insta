@@ -473,6 +473,7 @@
     .pm-trim-header { display: flex; align-items: center; justify-content: space-between; }
     .pm-trim-label { font-size: .62rem; color: #888; font-weight: 600; }
     .pm-trim-display { font-size: .62rem; color: #4a90d9; font-weight: 700; min-width: 70px; text-align: right; }
+    .pm-preview-btn { padding: 2px 7px !important; font-size: .65rem !important; margin-left: 4px; }
 
     /* ── 사진별 재생 시간 ── */
     .photo-dur-row {
@@ -1110,6 +1111,7 @@ function renderPreviews() {
             <div class="pm-trim-header">
               <span class="pm-trim-label">✂️ 구간</span>
               <span class="pm-trim-display">0:00 – 끝</span>
+              <button class="pm-preview-btn music-preview-btn">▶</button>
             </div>
             <div class="dual-range-wrap">
               <div class="dual-range-track">
@@ -1166,6 +1168,27 @@ function renderPreviews() {
     const pmTrimStart  = item.querySelector('.pm-trim-start');
     const pmTrimEnd    = item.querySelector('.pm-trim-end');
     const pmTrimFill   = item.querySelector('.pm-trim-section .dual-range-fill');
+    const pmPreviewBtn = item.querySelector('.pm-preview-btn');
+    let pmAudio = null;
+    function pmStopPreview() {
+      if (pmAudio) { pmAudio.pause(); pmAudio = null; }
+      pmPreviewBtn.textContent = '▶';
+    }
+    pmPreviewBtn.addEventListener('click', () => {
+      if (pmAudio) { pmStopPreview(); return; }
+      if (!photoMusicFiles[i]) return;
+      pmAudio = new Audio(URL.createObjectURL(photoMusicFiles[i]));
+      const trimS = photoMusicTrimStarts[i] || 0;
+      const trimE = photoMusicTrimEnds[i] > trimS ? photoMusicTrimEnds[i] : (photoMusicDurations[i] || 0);
+      pmAudio.currentTime = trimS;
+      pmAudio.volume = Math.min(1, photoMusicVolumes[i] || 1);
+      pmAudio.play();
+      pmPreviewBtn.textContent = '■';
+      pmAudio.addEventListener('timeupdate', () => {
+        if (pmAudio && trimE > trimS && pmAudio.currentTime >= trimE) pmStopPreview();
+      });
+      pmAudio.addEventListener('ended', pmStopPreview);
+    });
 
     function pmUpdateTrimFill() {
       const dur  = photoMusicDurations[i] || 100;
@@ -1224,6 +1247,7 @@ function renderPreviews() {
     });
     pmClearBtn.addEventListener('click', e => {
       e.preventDefault();
+      pmStopPreview();
       photoMusicFiles[i] = null; pmInput.value = '';
       pmSel.style.display = 'none'; pmFname.textContent = '';
       pmTrimSec.style.display = 'none';
