@@ -129,6 +129,18 @@ def make_clip(img_path: Path, clip_path: Path, duration: float, caption: str = '
     return run_ffmpeg(cmd)
 
 
+XFADE_TRANSITIONS = {
+    'fade', 'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+    'slideleft', 'slideright', 'slideup', 'slidedown',
+    'circlecrop', 'rectcrop', 'distance', 'fadeblack', 'fadewhite',
+    'radial', 'smoothleft', 'smoothright', 'smoothup', 'smoothdown',
+    'circleopen', 'circleclose', 'vertopen', 'vertclose',
+    'horzopen', 'horzclose', 'dissolve', 'pixelize',
+    'diagtl', 'diagtr', 'diagbl', 'diagbr',
+    'hlslice', 'hrslice', 'vuslice', 'vdslice', 'hblur',
+}
+
+
 def merge_two_clips(clip_a: Path, clip_b: Path, output: Path,
                     transition: str, dur_a: float) -> tuple[bool, str, float]:
     """두 클립을 전환 효과로 합치기. (ok, err, 새 길이) 반환."""
@@ -144,7 +156,7 @@ def merge_two_clips(clip_a: Path, clip_b: Path, output: Path,
         ok, err = run_ffmpeg(cmd)
         return ok, err, dur_a  # duration은 concat 후 ffprobe로 정확히 알 수 있지만 근사치 사용
 
-    xfade_name = 'fade' if transition == 'fade' else 'slideleft'
+    xfade_name = transition if transition in XFADE_TRANSITIONS else 'fade'
     offset = max(dur_a - TRANS_DUR, 0)
     cmd = [
         'ffmpeg', '-y',

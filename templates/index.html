@@ -307,11 +307,7 @@
     <div class="setting-row">
       <label>기본 전환 효과</label>
       <div class="control">
-        <select id="transition-select">
-          <option value="fade">페이드 (Fade)</option>
-          <option value="slide">슬라이드 (Slide)</option>
-          <option value="none">없음 (None)</option>
-        </select>
+        <select id="transition-select"></select>
       </div>
     </div>
   </div>
@@ -330,6 +326,46 @@
 </div>
 
 <script>
+  const TRANSITIONS = [
+    {v:'none',       label:'없음 (전환 효과 없이 바로 전환)'},
+    {v:'fade',       label:'페이드 (서서히 사라지며 전환)'},
+    {v:'fadeblack',  label:'페이드 블랙 (검은 화면으로 전환)'},
+    {v:'fadewhite',  label:'페이드 화이트 (흰 화면으로 전환)'},
+    {v:'dissolve',   label:'디졸브 (픽셀이 녹아들며 전환)'},
+    {v:'wipeleft',   label:'와이프 왼쪽 (오른쪽→왼쪽으로 덮기)'},
+    {v:'wiperight',  label:'와이프 오른쪽 (왼쪽→오른쪽으로 덮기)'},
+    {v:'wipeup',     label:'와이프 위 (아래→위로 덮기)'},
+    {v:'wipedown',   label:'와이프 아래 (위→아래로 덮기)'},
+    {v:'slideleft',  label:'슬라이드 왼쪽 (새 장면이 왼쪽에서 밀려옴)'},
+    {v:'slideright', label:'슬라이드 오른쪽 (새 장면이 오른쪽에서 밀려옴)'},
+    {v:'slideup',    label:'슬라이드 위 (새 장면이 위에서 밀려옴)'},
+    {v:'slidedown',  label:'슬라이드 아래 (새 장면이 아래에서 밀려옴)'},
+    {v:'smoothleft', label:'스무스 왼쪽 (부드럽게 왼쪽으로 밀림)'},
+    {v:'smoothright',label:'스무스 오른쪽 (부드럽게 오른쪽으로 밀림)'},
+    {v:'smoothup',   label:'스무스 위 (부드럽게 위로 밀림)'},
+    {v:'smoothdown', label:'스무스 아래 (부드럽게 아래로 밀림)'},
+    {v:'circlecrop', label:'원형 크롭 (원 모양으로 잘리며 전환)'},
+    {v:'rectcrop',   label:'사각 크롭 (사각형으로 잘리며 전환)'},
+    {v:'circleopen', label:'원형 열기 (원이 커지며 등장)'},
+    {v:'circleclose',label:'원형 닫기 (원이 작아지며 사라짐)'},
+    {v:'vertopen',   label:'세로 열기 (가운데서 위아래로 펼쳐짐)'},
+    {v:'vertclose',  label:'세로 닫기 (위아래에서 가운데로 닫힘)'},
+    {v:'horzopen',   label:'가로 열기 (가운데서 좌우로 펼쳐짐)'},
+    {v:'horzclose',  label:'가로 닫기 (좌우에서 가운데로 닫힘)'},
+    {v:'radial',     label:'방사형 (시계 방향으로 회전하며 전환)'},
+    {v:'distance',   label:'거리 (거리감 있게 중심부터 전환)'},
+    {v:'pixelize',   label:'픽셀화 (픽셀이 뭉쳐지며 전환)'},
+    {v:'diagtl',     label:'대각선 좌상단 (왼쪽 위 모서리부터 전환)'},
+    {v:'diagtr',     label:'대각선 우상단 (오른쪽 위 모서리부터 전환)'},
+    {v:'diagbl',     label:'대각선 좌하단 (왼쪽 아래 모서리부터 전환)'},
+    {v:'diagbr',     label:'대각선 우하단 (오른쪽 아래 모서리부터 전환)'},
+    {v:'hlslice',    label:'가로 슬라이스 (수평선이 잘라지며 전환)'},
+    {v:'hrslice',    label:'가로 역슬라이스 (수평선 역방향 전환)'},
+    {v:'vuslice',    label:'세로 슬라이스 (수직선이 잘라지며 전환)'},
+    {v:'vdslice',    label:'세로 역슬라이스 (수직선 역방향 전환)'},
+    {v:'hblur',      label:'수평 블러 (가로 방향으로 흐려지며 전환)'},
+  ];
+
   const dropZone      = document.getElementById('drop-zone');
   const fileInput     = document.getElementById('file-input');
   const previewGrid   = document.getElementById('preview-grid');
@@ -338,6 +374,15 @@
   const durationRange = document.getElementById('duration-range');
   const durationLabel = document.getElementById('duration-label');
   const transSelect   = document.getElementById('transition-select');
+  // 기본 전환 효과 select 옵션 채우기
+  TRANSITIONS.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.v;
+    opt.textContent = t.label;
+    if (t.v === 'fade') opt.selected = true;
+    transSelect.appendChild(opt);
+  });
+
   const statusEl      = document.getElementById('status');
   const progressWrap  = document.getElementById('progress-wrap');
   const downloadArea  = document.getElementById('download-area');
@@ -385,11 +430,7 @@
         </div>
         <textarea class="caption-input" placeholder="자막 입력 (선택)" rows="2"></textarea>
         <span class="trans-label">↓ 다음으로 전환</span>
-        <select class="trans-select">
-          <option value="fade" ${defaultTrans==='fade'?'selected':''}>페이드</option>
-          <option value="slide" ${defaultTrans==='slide'?'selected':''}>슬라이드</option>
-          <option value="none" ${defaultTrans==='none'?'selected':''}>없음</option>
-        </select>
+        <select class="trans-select">${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===defaultTrans?' selected':''}>${t.label}</option>`).join('')}</select>
       `;
       item.querySelector('.remove-btn').addEventListener('click', () => removeFile(i));
       previewGrid.appendChild(item);
