@@ -69,6 +69,9 @@ def build_caption_filter(text: str, font_size: int = 55) -> str:
     font_path = get_font_path()
     escaped = escape_drawtext(text.strip())
     fp = font_path.replace('\\', '/') if font_path else ''
+    # Windows 드라이브 문자 콜론 이스케이프 (C: → C\:)
+    if len(fp) >= 2 and fp[1] == ':':
+        fp = fp[0] + '\\:' + fp[2:]
     font_part = f"fontfile='{fp}':" if fp else ''
     y_pos = VIDEO_HEIGHT - font_size * 3
     return (
