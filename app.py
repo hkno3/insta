@@ -84,7 +84,8 @@ def build_caption_filter(text: str, font_size: int = 55) -> str:
 
 
 def prepare_image(src_path: Path, dst_path: Path):
-    img = Image.open(src_path).convert('RGB')
+    from PIL import ImageOps
+    img = ImageOps.exif_transpose(Image.open(src_path)).convert('RGB')
     src_w, src_h = img.size
     target_ratio = VIDEO_WIDTH / VIDEO_HEIGHT
     src_ratio = src_w / src_h
