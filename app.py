@@ -102,8 +102,17 @@ def prepare_image(src_path: Path, dst_path: Path):
     img.save(dst_path, 'JPEG', quality=95)
 
 
+def run_ffmpeg(cmd: list) -> tuple[bool, str]:
+    """ffmpeg 실행 후 (성공여부, 에러메시지) 반환."""
+    result = subprocess.run(cmd, capture_output=True)
+    stderr = result.stderr.decode('utf-8', errors='ignore') if result.stderr else ''
+    if result.returncode != 0:
+        app.logger.error(f"ffmpeg failed:\n{stderr}")
+    return result.returncode == 0, stderr
+
+
 def make_clip(img_path: Path, clip_path: Path, duration: float,
-              caption: str = '', extra_vf: str = '') -> bool:
+              caption: str = '', extra_vf: str = '') -> tuple[bool, str]:
     """단일 이미지로 클립 생성 (자막 포함 가능)."""
     filters = [f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}']
     if extra_vf:
@@ -122,16 +131,17 @@ def make_clip(img_path: Path, clip_path: Path, duration: float,
         '-r', '30',
         str(clip_path),
     ]
-    result = subprocess.run(cmd, capture_output=True)
-    return result.returncode == 0
+    return run_ffmpeg(cmd)
 
 
-def concat_clips(clip_paths: list[Path], output_path: Path) -> bool:
+def concat_clips(clip_paths: list[Path], output_path: Path) -> tuple[bool, str]:
     """클립들을 순서대로 이어붙이기."""
     concat_list = output_path.parent / f'concat_{output_path.stem}.txt'
     with open(concat_list, 'w', encoding='utf-8') as f:
         for c in clip_paths:
-            f.write(f"file '{c.resolve()}'\n")
+            # Windows 경로 백슬래시를 슬래시로 변환
+            p = str(c.resolve()).replace('\\', '/')
+            f.write(f"file '{p}'\n")
 
     cmd = [
         'ffmpeg', '-y',
@@ -140,18 +150,17 @@ def concat_clips(clip_paths: list[Path], output_path: Path) -> bool:
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
         str(output_path),
     ]
-    result = subprocess.run(cmd, capture_output=True)
+    ok, err = run_ffmpeg(cmd)
     concat_list.unlink(missing_ok=True)
-    return result.returncode == 0
+    return ok, err
 
 
 def make_video(image_paths: list[Path], output_path: Path,
                duration: float, transition: str,
-               captions: list[str] | None = None) -> bool:
+               captions: list[str] | None = None) -> tuple[bool, str]:
     """ffmpeg를 사용해 이미지 슬라이드쇼 영상 생성."""
     if captions is None:
         captions = [''] * len(image_paths)
-    # 길이 맞추기
     while len(captions) < len(image_paths):
         captions.append('')
 
@@ -171,15 +180,16 @@ def _make_simple_video(image_paths, output_path, duration, captions):
 
     for i, (img_path, caption) in enumerate(zip(image_paths, captions)):
         clip_path = tmp_dir / f'clip_{i:03d}.mp4'
-        if not make_clip(img_path, clip_path, duration, caption):
-            return False
+        ok, err = make_clip(img_path, clip_path, duration, caption)
+        if not ok:
+            return False, err
         clips.append(clip_path)
 
-    success = concat_clips(clips, output_path)
+    ok, err = concat_clips(clips, output_path)
     for c in clips:
         c.unlink(missing_ok=True)
     tmp_dir.rmdir()
-    return success
+    return ok, err
 
 
 def _make_fade_video(image_paths, output_path, duration, captions):
@@ -195,15 +205,16 @@ def _make_fade_video(image_paths, output_path, duration, captions):
             f'fade=t=in:st=0:d={fade_dur},'
             f'fade=t=out:st={duration - fade_dur}:d={fade_dur}'
         )
-        if not make_clip(img_path, clip_path, duration, caption, fade_vf):
-            return False
+        ok, err = make_clip(img_path, clip_path, duration, caption, fade_vf)
+        if not ok:
+            return False, err
         clips.append(clip_path)
 
-    success = concat_clips(clips, output_path)
+    ok, err = concat_clips(clips, output_path)
     for c in clips:
         c.unlink(missing_ok=True)
     tmp_dir.rmdir()
-    return success
+    return ok, err
 
 
 def _make_slide_video(image_paths, output_path, duration, captions):
@@ -221,8 +232,9 @@ def _make_slide_video(image_paths, output_path, duration, captions):
 
     for i, (img_path, caption) in enumerate(zip(image_paths, captions)):
         clip_path = tmp_dir / f'clip_{i:03d}.mp4'
-        if not make_clip(img_path, clip_path, duration, caption):
-            return False
+        ok, err = make_clip(img_path, clip_path, duration, caption)
+        if not ok:
+            return False, err
         clips.append(clip_path)
 
     current = clips[0]
@@ -241,8 +253,8 @@ def _make_slide_video(image_paths, output_path, duration, captions):
             '-r', str(fps),
             str(merged),
         ]
-        result = subprocess.run(cmd, capture_output=True)
-        if result.returncode != 0:
+        ok, err = run_ffmpeg(cmd)
+        if not ok:
             for c in clips:
                 c.unlink(missing_ok=True)
             tmp_dir.rmdir()
@@ -256,7 +268,7 @@ def _make_slide_video(image_paths, output_path, duration, captions):
     for f in tmp_dir.iterdir():
         f.unlink(missing_ok=True)
     tmp_dir.rmdir()
-    return True
+    return True, ''
 
 
 @app.route('/')
@@ -303,10 +315,10 @@ def create_video():
         return jsonify({'error': '유효한 이미지 파일이 없습니다.'}), 400
 
     output_path = OUTPUT_FOLDER / f'{job_id}.mp4'
-    success = make_video(prepared, output_path, duration, transition, captions)
+    success, err_msg = make_video(prepared, output_path, duration, transition, captions)
 
     if not success:
-        return jsonify({'error': '영상 생성에 실패했습니다. ffmpeg 설치 여부를 확인해 주세요.'}), 500
+        return jsonify({'error': f'영상 생성 실패: {err_msg[:300] if err_msg else "ffmpeg 오류"}'}), 500
 
     return jsonify({'video_id': job_id})
 
