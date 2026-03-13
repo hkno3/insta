@@ -351,6 +351,26 @@
     #download-area .hint { color: #888; font-size: .82rem; margin-top: 8px; }
     .error-msg { color: #e74c3c; font-weight: 600; }
     .section-title { font-size: .82rem; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+
+    /* ── 음악 업로드 ── */
+    .music-upload-area {
+      border: 2px dashed #e0e0e0; border-radius: 14px;
+      padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+      cursor: pointer; transition: border-color .2s, background .2s;
+      margin-bottom: 10px;
+    }
+    .music-upload-area:hover { border-color: #f5576c; background: #fff5f5; }
+    .music-upload-area.has-file { border-color: #f5576c; background: #fff5f5; }
+    .music-upload-area .music-icon { font-size: 1.5rem; flex-shrink: 0; }
+    .music-upload-area .music-text { font-size: .85rem; color: #888; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .music-upload-area .music-text.selected { color: #333; font-weight: 600; }
+    .music-clear-btn {
+      background: none; border: none; cursor: pointer; color: #aaa;
+      font-size: 1.1rem; padding: 2px 4px; border-radius: 50%;
+      transition: color .15s;
+    }
+    .music-clear-btn:hover { color: #f5576c; }
+    #music-volume-row { display: none; }
   </style>
 </head>
 <body>
@@ -399,6 +419,22 @@
       <div class="setting-row">
         <label>기본 전환 효과</label>
         <div class="control"><select id="transition-select"></select></div>
+      </div>
+      <div class="setting-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>🎵 배경음악</label>
+        <div class="music-upload-area" id="music-upload-area">
+          <span class="music-icon">🎵</span>
+          <span class="music-text" id="music-text">클릭해서 음악 파일 선택 (MP3·WAV·AAC·M4A 등)</span>
+          <button class="music-clear-btn" id="music-clear-btn" style="display:none;" title="음악 제거">✕</button>
+          <input type="file" id="music-input" accept="audio/*" style="display:none;" />
+        </div>
+        <div class="setting-row" id="music-volume-row" style="margin-bottom:0;">
+          <label style="font-size:.82rem;">볼륨</label>
+          <div class="control">
+            <input type="range" id="music-volume" min="0" max="2" step="0.05" value="1" />
+            <span id="music-volume-label">100%</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1006,8 +1042,57 @@ function collectFormData() {
   fd.append('stickers',       JSON.stringify(stickersPerPhoto));
   fd.append('caption_styles', JSON.stringify(captionStyles));
   fd.append('format',         selectedFormat);
+  if (selectedMusicFile) {
+    fd.append('music', selectedMusicFile);
+    fd.append('music_volume', document.getElementById('music-volume').value);
+  }
   return fd;
 }
+
+/* ── 음악 업로드 UI ── */
+let selectedMusicFile = null;
+const musicUploadArea = document.getElementById('music-upload-area');
+const musicInput      = document.getElementById('music-input');
+const musicText       = document.getElementById('music-text');
+const musicClearBtn   = document.getElementById('music-clear-btn');
+const musicVolumeRow  = document.getElementById('music-volume-row');
+const musicVolumeEl   = document.getElementById('music-volume');
+const musicVolumeLabel= document.getElementById('music-volume-label');
+
+musicUploadArea.addEventListener('click', e => {
+  if (e.target === musicClearBtn) return;
+  musicInput.click();
+});
+
+musicInput.addEventListener('change', () => {
+  const file = musicInput.files[0];
+  if (!file) return;
+  selectedMusicFile = file;
+  musicText.textContent = file.name;
+  musicText.classList.add('selected');
+  musicUploadArea.classList.add('has-file');
+  musicClearBtn.style.display = '';
+  musicVolumeRow.style.display = '';
+  if (hasGenerated) scheduleRegen();
+});
+
+musicClearBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  selectedMusicFile = null;
+  musicInput.value = '';
+  musicText.textContent = '클릭해서 음악 파일 선택 (MP3·WAV·AAC·M4A 등)';
+  musicText.classList.remove('selected');
+  musicUploadArea.classList.remove('has-file');
+  musicClearBtn.style.display = 'none';
+  musicVolumeRow.style.display = 'none';
+  if (hasGenerated) scheduleRegen();
+});
+
+musicVolumeEl.addEventListener('input', () => {
+  const pct = Math.round(parseFloat(musicVolumeEl.value) * 100);
+  musicVolumeLabel.textContent = pct + '%';
+  if (hasGenerated) scheduleRegen();
+});
 
 async function generateVideo(isRegen = false) {
   if (selectedFiles.length === 0 || isGenerating) return;

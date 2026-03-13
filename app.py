@@ -22,6 +22,7 @@ EMOJI_CACHE.mkdir(exist_ok=True)
 
 IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'}
 VIDEO_EXTENSIONS = {'mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'}
+AUDIO_EXTENSIONS = {'mp3', 'wav', 'aac', 'm4a', 'ogg', 'flac'}
 ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
@@ -425,6 +426,25 @@ def make_video(media_paths: list[Path], output_path: Path,
     return True, ''
 
 
+def add_background_music(video_path: Path, music_path: Path, output_path: Path,
+                          volume: float = 1.0) -> tuple[bool, str]:
+    """완성된 영상에 배경음악 추가. 음악이 짧으면 반복, 길면 자름."""
+    cmd = [
+        'ffmpeg', '-y',
+        '-i', str(video_path),
+        '-stream_loop', '-1', '-i', str(music_path),
+        '-filter_complex',
+        f'[1:a]volume={volume:.2f}[a]',
+        '-map', '0:v',
+        '-map', '[a]',
+        '-shortest',
+        '-c:v', 'copy',
+        '-c:a', 'aac', '-b:a', '192k',
+        str(output_path),
+    ]
+    return run_ffmpeg(cmd)
+
+
 def _cleanup(tmp_dir: Path):
     for f in tmp_dir.iterdir():
         f.unlink(missing_ok=True)
@@ -439,6 +459,8 @@ def index():
 @app.route('/create', methods=['POST'])
 def create_video():
     files = request.files.getlist('photos')
+    music_file = request.files.get('music')
+    music_volume = float(request.form.get('music_volume', 1.0))
     duration = float(request.form.get('duration', 3.0))
     captions_json       = request.form.get('captions',       '[]')
     transitions_json    = request.form.get('transitions',    '[]')
@@ -495,14 +517,28 @@ def create_video():
     if not prepared:
         return jsonify({'error': '유효한 파일이 없습니다.'}), 400
 
-    output_path = OUTPUT_FOLDER / f'{job_id}.mp4'
+    video_path = OUTPUT_FOLDER / f'{job_id}.mp4'
     success, err_msg = make_video(
-        prepared, output_path, duration, transitions, captions, stickers_per_photo, width, height, caption_styles
+        prepared, video_path, duration, transitions, captions, stickers_per_photo, width, height, caption_styles
     )
 
     if not success:
         snippet = err_msg[-800:] if err_msg else "ffmpeg 오류"
         return jsonify({'error': f'영상 생성 실패: {snippet}'}), 500
+
+    # 배경음악 처리
+    if music_file and music_file.filename:
+        music_ext = music_file.filename.rsplit('.', 1)[-1].lower()
+        if music_ext in AUDIO_EXTENSIONS:
+            music_path = job_dir / f'music.{music_ext}'
+            music_file.save(music_path)
+            output_path = OUTPUT_FOLDER / f'{job_id}_final.mp4'
+            ok, err = add_background_music(video_path, music_path, output_path, music_volume)
+            if ok:
+                video_path.unlink(missing_ok=True)
+                output_path.rename(video_path)
+            else:
+                app.logger.warning(f'배경음악 추가 실패, 음악 없이 반환: {err[-300:]}')
 
     return jsonify({'video_id': job_id})
 
