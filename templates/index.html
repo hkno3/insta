@@ -22,7 +22,7 @@
       border-radius: 24px;
       padding: 40px;
       width: 100%;
-      max-width: 600px;
+      max-width: 640px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.15);
     }
 
@@ -65,50 +65,73 @@
     /* ── 미리보기 그리드 ── */
     #preview-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 12px;
       margin-bottom: 24px;
     }
+
     .preview-item {
+      display: flex;
+      flex-direction: column;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+      background: #fff;
+    }
+
+    .preview-img-wrap {
       position: relative;
       aspect-ratio: 9/16;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      background: #000;
     }
-    .preview-item img {
+    .preview-img-wrap img {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
-    .preview-item .order-badge {
+    .order-badge {
       position: absolute;
-      top: 4px;
-      left: 4px;
-      background: rgba(0,0,0,0.55);
+      top: 5px;
+      left: 5px;
+      background: rgba(0,0,0,0.6);
       color: #fff;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       font-weight: 700;
       padding: 2px 6px;
       border-radius: 6px;
     }
-    .preview-item .remove-btn {
+    .remove-btn {
       position: absolute;
-      top: 4px;
-      right: 4px;
+      top: 5px;
+      right: 5px;
       background: #f5576c;
       color: #fff;
       border: none;
       border-radius: 50%;
       width: 20px;
       height: 20px;
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      line-height: 1;
     }
+
+    /* ── 자막 입력 ── */
+    .caption-input {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 0.78rem;
+      border: none;
+      border-top: 1.5px solid #f0f0f0;
+      outline: none;
+      background: #fafafa;
+      color: #333;
+      resize: none;
+      font-family: inherit;
+    }
+    .caption-input::placeholder { color: #bbb; }
+    .caption-input:focus { background: #fff0f3; border-top-color: #f5576c; }
 
     /* ── 설정 ── */
     .settings { margin-bottom: 24px; }
@@ -127,7 +150,7 @@
 
     input[type=range] {
       -webkit-appearance: none;
-      width: 160px;
+      width: 150px;
       height: 6px;
       background: #f5576c;
       border-radius: 3px;
@@ -220,7 +243,16 @@
     #download-area a:hover { opacity: 0.85; }
     #download-area p { color: #888; font-size: 0.82rem; margin-top: 8px; }
 
-    .error-msg { color: #e74c3c; font-weight: 600; margin-top: 12px; }
+    .error-msg { color: #e74c3c; font-weight: 600; }
+
+    .section-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
@@ -236,8 +268,11 @@
     <input type="file" id="file-input" accept="image/*" multiple />
   </div>
 
-  <!-- 미리보기 -->
-  <div id="preview-grid"></div>
+  <!-- 미리보기 + 자막 입력 -->
+  <div id="preview-section" style="display:none; margin-bottom:24px;">
+    <p class="section-title">사진 순서 및 자막 입력</p>
+    <div id="preview-grid"></div>
+  </div>
 
   <!-- 설정 -->
   <div class="settings">
@@ -274,17 +309,18 @@
 </div>
 
 <script>
-  const dropZone   = document.getElementById('drop-zone');
-  const fileInput  = document.getElementById('file-input');
-  const previewGrid = document.getElementById('preview-grid');
-  const createBtn  = document.getElementById('create-btn');
+  const dropZone      = document.getElementById('drop-zone');
+  const fileInput     = document.getElementById('file-input');
+  const previewGrid   = document.getElementById('preview-grid');
+  const previewSection = document.getElementById('preview-section');
+  const createBtn     = document.getElementById('create-btn');
   const durationRange = document.getElementById('duration-range');
   const durationLabel = document.getElementById('duration-label');
-  const transSelect = document.getElementById('transition-select');
-  const statusEl   = document.getElementById('status');
-  const progressWrap = document.getElementById('progress-wrap');
-  const downloadArea = document.getElementById('download-area');
-  const downloadLink = document.getElementById('download-link');
+  const transSelect   = document.getElementById('transition-select');
+  const statusEl      = document.getElementById('status');
+  const progressWrap  = document.getElementById('progress-wrap');
+  const downloadArea  = document.getElementById('download-area');
+  const downloadLink  = document.getElementById('download-link');
 
   let selectedFiles = [];
 
@@ -320,16 +356,22 @@
       const item = document.createElement('div');
       item.className = 'preview-item';
       item.innerHTML = `
-        <img src="${url}" alt="photo ${i+1}" />
-        <span class="order-badge">${i + 1}</span>
-        <button class="remove-btn" title="삭제">×</button>
+        <div class="preview-img-wrap">
+          <img src="${url}" alt="photo ${i+1}" />
+          <span class="order-badge">${i + 1}</span>
+          <button class="remove-btn" title="삭제">×</button>
+        </div>
+        <textarea class="caption-input" placeholder="자막 입력 (선택)" rows="2"></textarea>
       `;
       item.querySelector('.remove-btn').addEventListener('click', () => removeFile(i));
       previewGrid.appendChild(item);
     });
-    createBtn.disabled = selectedFiles.length === 0;
+
+    const hasFiles = selectedFiles.length > 0;
+    previewSection.style.display = hasFiles ? 'block' : 'none';
+    createBtn.disabled = !hasFiles;
     downloadArea.style.display = 'none';
-    statusEl.textContent = selectedFiles.length > 0 ? `${selectedFiles.length}장 선택됨` : '';
+    statusEl.textContent = hasFiles ? `${selectedFiles.length}장 선택됨` : '';
     statusEl.className = '';
   }
 
@@ -342,10 +384,15 @@
   createBtn.addEventListener('click', async () => {
     if (selectedFiles.length === 0) return;
 
+    // 자막 수집
+    const captions = Array.from(previewGrid.querySelectorAll('.caption-input'))
+      .map(el => el.value.trim());
+
     const formData = new FormData();
     selectedFiles.forEach(f => formData.append('photos', f));
     formData.append('duration', durationRange.value);
     formData.append('transition', transSelect.value);
+    formData.append('captions', JSON.stringify(captions));
 
     createBtn.disabled = true;
     statusEl.textContent = '영상을 만드는 중입니다… 잠시만 기다려 주세요.';
