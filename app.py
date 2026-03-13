@@ -456,17 +456,18 @@ def add_audio_to_video(video_path: Path, output_path: Path,
                        bg_music: Path | None = None,
                        bg_volume: float = 1.0,
                        bg_start: float = 0.0,
-                       bg_end: float = 0.0) -> tuple[bool, str]:
-    """영상에 배경음악·효과음 합성."""
+                       bg_end: float = 0.0,
+                       photo_music_list: list | None = None) -> tuple[bool, str]:
+    """영상에 배경음악·효과음·사진별배경음 합성.
+    photo_music_list: [(path, start_sec, duration, volume), ...]"""
     cmd = ['ffmpeg', '-y', '-i', str(video_path)]
     fc = []
     labels = []
     idx = 1
-    _seg_path = None  # 임시 세그먼트 파일
+    _seg_path = None
 
     if bg_music:
         if bg_end > bg_start:
-            # aloop 방식은 size 버퍼 대기로 hang 발생 → 구간을 파일로 추출 후 stream_loop
             _seg_path = bg_music.parent / 'bgm_segment.aac'
             run_ffmpeg([
                 'ffmpeg', '-y', '-i', str(bg_music),
@@ -485,6 +486,18 @@ def add_audio_to_video(video_path: Path, output_path: Path,
         cmd += ['-i', str(sfx_path)]
         lbl = f'sfx{idx}'
         fc.append(f'[{idx}:a]adelay={delay_ms}|{delay_ms}[{lbl}]')
+        labels.append(f'[{lbl}]')
+        idx += 1
+
+    # 사진별 배경음: (path, start_sec, duration_sec, volume)
+    for pm_path, pm_start, pm_dur, pm_vol in (photo_music_list or []):
+        delay_ms = int(pm_start * 1000)
+        cmd += ['-i', str(pm_path)]
+        lbl = f'pm{idx}'
+        fc.append(
+            f'[{idx}:a]atrim=end={pm_dur:.3f},asetpts=PTS-STARTPTS,'
+            f'adelay={delay_ms}|{delay_ms},volume={pm_vol:.2f}[{lbl}]'
+        )
         labels.append(f'[{lbl}]')
         idx += 1
 
@@ -610,11 +623,15 @@ def create_video():
             bg_path = job_dir / f'music.{music_ext}'
             music_file.save(bg_path)
 
-    # 효과음 수집
-    sfx_list = []
+    # 효과음 + 사진별 배경음 수집
+    sfx_list         = []
+    photo_music_list = []
     sfx_keys = [k for k in request.files if k.startswith('sfx_')]
-    if sfx_keys:
+    pm_keys  = [k for k in request.files if k.startswith('photo_music_')]
+
+    if sfx_keys or pm_keys:
         start_times = compute_sfx_start_times(prepared, duration, transitions, photo_durations)
+
         for key in sfx_keys:
             try:
                 photo_idx = int(key.split('_', 1)[1])
@@ -630,11 +647,35 @@ def create_video():
                 t = start_times[photo_idx] if photo_idx < len(start_times) else 0.0
                 sfx_list.append((sfx_path, t))
 
+        for key in pm_keys:
+            try:
+                photo_idx = int(key.split('_')[-1])
+            except ValueError:
+                continue
+            f = request.files[key]
+            if not f.filename or photo_idx >= len(prepared):
+                continue
+            ext = f.filename.rsplit('.', 1)[-1].lower()
+            if ext not in AUDIO_EXTENSIONS:
+                continue
+            pm_path = job_dir / f'{key}.{ext}'
+            f.save(pm_path)
+            pm_vol = float(request.form.get(f'photo_music_vol_{photo_idx}', 1.0))
+            if is_video(prepared[photo_idx]):
+                pm_dur = get_media_duration(prepared[photo_idx])
+            elif photo_durations and photo_idx < len(photo_durations) and photo_durations[photo_idx]:
+                pm_dur = float(photo_durations[photo_idx])
+            else:
+                pm_dur = duration
+            pm_start = start_times[photo_idx] if photo_idx < len(start_times) else 0.0
+            photo_music_list.append((pm_path, pm_start, pm_dur, pm_vol))
+
     # 오디오 합성
-    if bg_path or sfx_list:
+    if bg_path or sfx_list or photo_music_list:
         audio_out = OUTPUT_FOLDER / f'{job_id}_audio.mp4'
         ok, err = add_audio_to_video(video_path, audio_out, sfx_list,
-                                     bg_path, music_volume, music_start, music_end)
+                                     bg_path, music_volume, music_start, music_end,
+                                     photo_music_list)
         if ok:
             video_path.unlink(missing_ok=True)
             audio_out.rename(video_path)

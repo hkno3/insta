@@ -460,6 +460,16 @@
     }
     .sfx-clear-btn:hover { color: #f5576c; }
 
+    /* ── 사진별 배경음 ── */
+    .photo-music-row {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 6px 10px; border-bottom: 1.5px solid #f0f0f0; background: #f0f7ff;
+    }
+    .photo-music-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .photo-music-sel { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+    .photo-music-vol { width: 65px !important; height: 4px; }
+    .photo-music-vol-lbl { font-size: .65rem; color: #4a90d9; font-weight: 700; min-width: 30px; }
+
     /* ── 사진별 재생 시간 ── */
     .photo-dur-row {
       display: flex; align-items: center; gap: 0;
@@ -813,6 +823,8 @@ let captionPositions   = [];   // [{x:0.5, y:0.88}, ...]
 let sfxFiles           = [];   // per-photo sound effect File or null
 let sfxPresets         = [];   // per-photo active preset id or null
 let durationsPerPhoto  = [];   // per-photo duration (images only; null = use global)
+let photoMusicFiles    = [];   // per-photo background music File or null
+let photoMusicVolumes  = [];   // per-photo background music volume (default 1.0)
 let hasGenerated       = false;
 let isGenerating       = false;
 
@@ -992,6 +1004,8 @@ function addFiles(files) {
     sfxFiles.push(null);
     sfxPresets.push(null);
     durationsPerPhoto.push(parseFloat(durationRange.value));
+    photoMusicFiles.push(null);
+    photoMusicVolumes.push(1.0);
   });
   renderPreviews();
 }
@@ -1002,6 +1016,8 @@ function removeFile(idx) {
   sfxFiles.splice(idx, 1);
   sfxPresets.splice(idx, 1);
   durationsPerPhoto.splice(idx, 1);
+  photoMusicFiles.splice(idx, 1);
+  photoMusicVolumes.splice(idx, 1);
   renderPreviews();
   if (hasGenerated) scheduleRegen();
 }
@@ -1066,6 +1082,18 @@ function renderPreviews() {
           <input type="range" class="photo-dur-range" min="1" max="10" step="0.5" value="${durationsPerPhoto[i] || durationRange.value}" />
           <span class="photo-dur-label">${(durationsPerPhoto[i] || durationRange.value)}초</span>
         </div>` : ''}
+        <div class="photo-music-row">
+          <div class="photo-music-top">
+            <span class="sfx-label">🎵 배경음</span>
+            <label class="sfx-file-label">📂<input type="file" class="photo-music-input" accept="audio/*" style="display:none"/></label>
+          </div>
+          <div class="photo-music-sel" style="display:none">
+            <span class="sfx-fname photo-music-fname"></span>
+            <input type="range" class="photo-music-vol" min="0" max="2" step="0.05" value="${photoMusicVolumes[i] || 1}" />
+            <span class="photo-music-vol-lbl">${Math.round((photoMusicVolumes[i] || 1) * 100)}%</span>
+            <button class="sfx-clear-btn photo-music-clear" title="배경음 제거">✕</button>
+          </div>
+        </div>
         <div class="sfx-row">
           <div class="sfx-top">
             <span class="sfx-label">🔊 효과음</span>
@@ -1098,6 +1126,40 @@ function renderPreviews() {
         durationsPerPhoto[i] = parseFloat(durRange.value);
         if (hasGenerated) scheduleRegen();
       });
+    }
+
+    // ── 사진별 배경음 ──
+    const pmInput    = item.querySelector('.photo-music-input');
+    const pmSel      = item.querySelector('.photo-music-sel');
+    const pmFname    = item.querySelector('.photo-music-fname');
+    const pmVol      = item.querySelector('.photo-music-vol');
+    const pmVolLbl   = item.querySelector('.photo-music-vol-lbl');
+    const pmClearBtn = item.querySelector('.photo-music-clear');
+
+    pmInput.addEventListener('change', () => {
+      const f = pmInput.files[0]; if (!f) return;
+      photoMusicFiles[i] = f;
+      pmFname.textContent = f.name;
+      pmSel.style.display = 'flex';
+      if (hasGenerated) scheduleRegen();
+    });
+    pmVol.addEventListener('input', () => {
+      const pct = Math.round(parseFloat(pmVol.value) * 100);
+      pmVolLbl.textContent = pct + '%';
+      photoMusicVolumes[i] = parseFloat(pmVol.value);
+      if (hasGenerated) scheduleRegen();
+    });
+    pmClearBtn.addEventListener('click', e => {
+      e.preventDefault();
+      photoMusicFiles[i] = null; pmInput.value = '';
+      pmSel.style.display = 'none'; pmFname.textContent = '';
+      if (hasGenerated) scheduleRegen();
+    });
+    if (photoMusicFiles[i]) {
+      pmFname.textContent = photoMusicFiles[i].name;
+      pmVol.value = photoMusicVolumes[i];
+      pmVolLbl.textContent = Math.round(photoMusicVolumes[i] * 100) + '%';
+      pmSel.style.display = 'flex';
     }
 
     // ── 효과음 ──
@@ -1378,6 +1440,12 @@ function collectFormData() {
   }
   sfxFiles.forEach((f, i) => { if (f) fd.append(`sfx_${i}`, f); });
   fd.append('photo_durations', JSON.stringify(durationsPerPhoto));
+  photoMusicFiles.forEach((f, i) => {
+    if (f) {
+      fd.append(`photo_music_${i}`, f);
+      fd.append(`photo_music_vol_${i}`, (photoMusicVolumes[i] || 1.0).toFixed(2));
+    }
+  });
   return fd;
 }
 
