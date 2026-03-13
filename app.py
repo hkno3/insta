@@ -420,12 +420,13 @@ def make_video(media_paths: list[Path], output_path: Path,
     for i in range(1, n):
         trans = transitions[i - 1]
         merged = tmp_dir / f'merged_{i:03d}.mp4'
-        ok, err, current_dur = merge_two_clips(current, clips[i], merged, trans, current_dur)
+        ok, err, _ = merge_two_clips(current, clips[i], merged, trans, current_dur)
         if not ok:
             _cleanup(tmp_dir)
             return False, err
         current = merged
-        current_dur += clip_durations[i]
+        # 이론값 누적 대신 실제 길이 측정 → xfade offset 오차 누적 방지
+        current_dur = get_media_duration(merged)
 
     shutil.copy2(current, output_path)
     _cleanup(tmp_dir)
@@ -456,28 +457,26 @@ def add_audio_to_video(video_path: Path, output_path: Path,
                        bg_volume: float = 1.0,
                        bg_start: float = 0.0,
                        bg_end: float = 0.0) -> tuple[bool, str]:
-    """영상에 배경음악·효과음 합성.
-    sfx_list: [(audio_path, start_sec), ...] 각 효과음과 시작 시간.
-    bg_music: 배경음악 경로 (없으면 None).
-    bg_end > bg_start이면 해당 구간만 반복, 그렇지 않으면 bg_start부터 루프."""
+    """영상에 배경음악·효과음 합성."""
     cmd = ['ffmpeg', '-y', '-i', str(video_path)]
     fc = []
     labels = []
     idx = 1
+    _seg_path = None  # 임시 세그먼트 파일
 
     if bg_music:
         if bg_end > bg_start:
-            cmd += ['-i', str(bg_music)]
-            # size = samples in trimmed segment at max 48 kHz (+ 1 sec buffer)
-            seg_samples = int((bg_end - bg_start) * 48000) + 48001
-            fc.append(
-                f'[{idx}:a]atrim=start={bg_start:.2f}:end={bg_end:.2f},'
-                f'asetpts=PTS-STARTPTS,aloop=loop=-1:size={seg_samples},'
-                f'volume={bg_volume:.2f}[bgm]'
-            )
+            # aloop 방식은 size 버퍼 대기로 hang 발생 → 구간을 파일로 추출 후 stream_loop
+            _seg_path = bg_music.parent / 'bgm_segment.aac'
+            run_ffmpeg([
+                'ffmpeg', '-y', '-i', str(bg_music),
+                '-ss', f'{bg_start:.2f}', '-t', f'{(bg_end - bg_start):.2f}',
+                '-vn', '-c:a', 'aac', '-b:a', '128k', str(_seg_path),
+            ])
+            cmd += ['-stream_loop', '-1', '-i', str(_seg_path)]
         else:
             cmd += ['-stream_loop', '-1', '-ss', f'{bg_start:.2f}', '-i', str(bg_music)]
-            fc.append(f'[{idx}:a]volume={bg_volume:.2f}[bgm]')
+        fc.append(f'[{idx}:a]volume={bg_volume:.2f}[bgm]')
         labels.append('[bgm]')
         idx += 1
 
@@ -505,7 +504,12 @@ def add_audio_to_video(video_path: Path, output_path: Path,
         '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
         str(output_path),
     ]
-    return run_ffmpeg(cmd)
+    ok, err = run_ffmpeg(cmd)
+
+    if _seg_path and _seg_path.exists():
+        _seg_path.unlink(missing_ok=True)
+
+    return ok, err
 
 
 def _cleanup(tmp_dir: Path):
