@@ -371,7 +371,8 @@ def make_video(media_paths: list[Path], output_path: Path,
                stickers_per_photo: list[list] | None = None,
                width: int = VIDEO_WIDTH,
                height: int = VIDEO_HEIGHT,
-               caption_styles: list[dict] | None = None) -> tuple[bool, str]:
+               caption_styles: list[dict] | None = None,
+               photo_durations: list | None = None) -> tuple[bool, str]:
     n = len(media_paths)
     if captions is None:
         captions = [''] * n
@@ -395,7 +396,12 @@ def make_video(media_paths: list[Path], output_path: Path,
     clip_durations = []
     for i, (media, cap) in enumerate(zip(media_paths, captions)):
         clip = tmp_dir / f'clip_{i:03d}.mp4'
-        dur  = get_media_duration(media) if is_video(media) else img_duration
+        if is_video(media):
+            dur = get_media_duration(media)
+        elif photo_durations and i < len(photo_durations) and photo_durations[i]:
+            dur = float(photo_durations[i])
+        else:
+            dur = img_duration
         ok, err = make_clip(media, clip, dur, cap, stickers_per_photo[i], width, height, caption_styles[i])
         if not ok:
             _cleanup(tmp_dir)
@@ -427,11 +433,17 @@ def make_video(media_paths: list[Path], output_path: Path,
 
 
 def compute_sfx_start_times(media_paths: list[Path], img_duration: float,
-                             transitions: list[str]) -> list[float]:
+                             transitions: list[str],
+                             photo_durations: list | None = None) -> list[float]:
     """각 클립의 최종 영상 내 시작 시간(초) 계산."""
     starts = [0.0]
     for i in range(len(media_paths) - 1):
-        dur = get_media_duration(media_paths[i]) if is_video(media_paths[i]) else img_duration
+        if is_video(media_paths[i]):
+            dur = get_media_duration(media_paths[i])
+        elif photo_durations and i < len(photo_durations) and photo_durations[i]:
+            dur = float(photo_durations[i])
+        else:
+            dur = img_duration
         trans = transitions[i] if i < len(transitions) else 'none'
         overlap = TRANS_DUR if trans != 'none' else 0.0
         starts.append(starts[-1] + dur - overlap)
@@ -456,9 +468,11 @@ def add_audio_to_video(video_path: Path, output_path: Path,
     if bg_music:
         if bg_end > bg_start:
             cmd += ['-i', str(bg_music)]
+            # size = samples in trimmed segment at max 48 kHz (+ 1 sec buffer)
+            seg_samples = int((bg_end - bg_start) * 48000) + 48001
             fc.append(
                 f'[{idx}:a]atrim=start={bg_start:.2f}:end={bg_end:.2f},'
-                f'asetpts=PTS-STARTPTS,aloop=loop=-1:size=2147483647,'
+                f'asetpts=PTS-STARTPTS,aloop=loop=-1:size={seg_samples},'
                 f'volume={bg_volume:.2f}[bgm]'
             )
         else:
@@ -514,10 +528,11 @@ def create_video():
     music_end_raw = request.form.get('music_end', '')
     music_end    = float(music_end_raw) if music_end_raw else 0.0
     duration = float(request.form.get('duration', 3.0))
-    captions_json       = request.form.get('captions',       '[]')
-    transitions_json    = request.form.get('transitions',    '[]')
-    stickers_json       = request.form.get('stickers',       '[]')
-    caption_styles_json = request.form.get('caption_styles', '[]')
+    captions_json        = request.form.get('captions',        '[]')
+    transitions_json     = request.form.get('transitions',     '[]')
+    stickers_json        = request.form.get('stickers',        '[]')
+    caption_styles_json  = request.form.get('caption_styles',  '[]')
+    photo_durations_json = request.form.get('photo_durations', '[]')
     fmt = request.form.get('format', 'portrait')
     width, height = FORMATS.get(fmt, (VIDEO_WIDTH, VIDEO_HEIGHT))
 
@@ -537,6 +552,10 @@ def create_video():
         caption_styles = json.loads(caption_styles_json)
     except Exception:
         caption_styles = []
+    try:
+        photo_durations = json.loads(photo_durations_json)
+    except Exception:
+        photo_durations = []
 
     if not files or all(f.filename == '' for f in files):
         return jsonify({'error': '파일을 하나 이상 업로드해 주세요.'}), 400
@@ -571,7 +590,8 @@ def create_video():
 
     video_path = OUTPUT_FOLDER / f'{job_id}.mp4'
     success, err_msg = make_video(
-        prepared, video_path, duration, transitions, captions, stickers_per_photo, width, height, caption_styles
+        prepared, video_path, duration, transitions, captions,
+        stickers_per_photo, width, height, caption_styles, photo_durations
     )
 
     if not success:
@@ -590,7 +610,7 @@ def create_video():
     sfx_list = []
     sfx_keys = [k for k in request.files if k.startswith('sfx_')]
     if sfx_keys:
-        start_times = compute_sfx_start_times(prepared, duration, transitions)
+        start_times = compute_sfx_start_times(prepared, duration, transitions, photo_durations)
         for key in sfx_keys:
             try:
                 photo_idx = int(key.split('_', 1)[1])

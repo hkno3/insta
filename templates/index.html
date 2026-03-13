@@ -452,6 +452,16 @@
       font-size: .8rem; padding: 0 2px; line-height: 1;
     }
     .sfx-clear-btn:hover { color: #f5576c; }
+
+    /* ── 사진별 재생 시간 ── */
+    .photo-dur-row {
+      display: flex; align-items: center; gap: 0;
+      border-bottom: 1.5px solid #f0f0f0; padding: 0;
+    }
+    .photo-dur-range {
+      flex: 1; width: auto !important; height: 4px; margin: 0 8px;
+    }
+    .photo-dur-label { font-size: .72rem; color: #f5576c; font-weight: 700; white-space: nowrap; padding-right: 8px; min-width: 30px; text-align: right; }
   </style>
 </head>
 <body>
@@ -795,6 +805,7 @@ let stickersPerPhoto   = [];
 let captionPositions   = [];   // [{x:0.5, y:0.88}, ...]
 let sfxFiles           = [];   // per-photo sound effect File or null
 let sfxPresets         = [];   // per-photo active preset id or null
+let durationsPerPhoto  = [];   // per-photo duration (images only; null = use global)
 let hasGenerated       = false;
 let debounceTimer      = null;
 let isGenerating       = false;
@@ -974,6 +985,7 @@ function addFiles(files) {
     captionPositions.push({x:0.5, y:0.88});
     sfxFiles.push(null);
     sfxPresets.push(null);
+    durationsPerPhoto.push(parseFloat(durationRange.value));
   });
   renderPreviews();
 }
@@ -983,6 +995,7 @@ function removeFile(idx) {
   captionPositions.splice(idx, 1);
   sfxFiles.splice(idx, 1);
   sfxPresets.splice(idx, 1);
+  durationsPerPhoto.splice(idx, 1);
   renderPreviews();
   if (hasGenerated) scheduleRegen();
 }
@@ -1042,6 +1055,11 @@ function renderPreviews() {
             ${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===dt?' selected':''}>${t.label}</option>`).join('')}
           </select>
         </div>
+        ${!isVid ? `<div class="photo-dur-row">
+          <span class="trans-label">⏱ 재생</span>
+          <input type="range" class="photo-dur-range" min="1" max="10" step="0.5" value="${durationsPerPhoto[i] || durationRange.value}" />
+          <span class="photo-dur-label">${(durationsPerPhoto[i] || durationRange.value)}초</span>
+        </div>` : ''}
         <div class="sfx-row">
           <div class="sfx-top">
             <span class="sfx-label">🔊 효과음</span>
@@ -1064,6 +1082,17 @@ function renderPreviews() {
 
     item.querySelector('.remove-photo-btn').addEventListener('click', () => removeFile(i));
     item.querySelector('.trans-select').addEventListener('change', () => { if (hasGenerated) scheduleRegen(); });
+
+    // ── 사진별 재생 시간 ──
+    if (!isVid) {
+      const durRange = item.querySelector('.photo-dur-range');
+      const durLabel = item.querySelector('.photo-dur-label');
+      durRange.addEventListener('input', () => {
+        durLabel.textContent = durRange.value + '초';
+        durationsPerPhoto[i] = parseFloat(durRange.value);
+        if (hasGenerated) scheduleRegen();
+      });
+    }
 
     // ── 효과음 ──
     const sfxInput    = item.querySelector('.sfx-file-input');
@@ -1290,6 +1319,14 @@ function renderPreviews() {
 /* ── 설정 변경 ── */
 durationRange.addEventListener('input', () => {
   durationLabel.textContent = durationRange.value + '초';
+  // 전체 동기화: 모든 사진 카드의 재생 시간도 같이 업데이트
+  const val = parseFloat(durationRange.value);
+  previewGrid.querySelectorAll('.photo-dur-range').forEach((r, idx) => {
+    r.value = val;
+    const lbl = r.closest('.photo-dur-row')?.querySelector('.photo-dur-label');
+    if (lbl) lbl.textContent = val + '초';
+    if (idx < durationsPerPhoto.length) durationsPerPhoto[idx] = val;
+  });
   if (hasGenerated) scheduleRegen();
 });
 transSelect.addEventListener('change', () => {
@@ -1332,6 +1369,7 @@ function collectFormData() {
     fd.append('music_end',    musicEndSec > 0 ? musicEndSec.toFixed(2) : '');
   }
   sfxFiles.forEach((f, i) => { if (f) fd.append(`sfx_${i}`, f); });
+  fd.append('photo_durations', JSON.stringify(durationsPerPhoto));
   return fd;
 }
 
