@@ -86,7 +86,7 @@
     .preview-img-wrap {
       flex-shrink: 0;
       position: relative;
-      width: 160px;
+      width: 220px;
       aspect-ratio: var(--preview-ratio, 9/16);
       background: #000;
       border-radius: 14px 0 0 14px;
@@ -229,19 +229,16 @@
 
     /* ── 스티커 팔레트 영역 ── */
     .sticker-area {
-      background: #fafafa; padding: 5px 10px;
+      background: #fafafa; padding: 6px 10px;
       border-radius: 0 0 14px 0;
     }
-    .sticker-toggle-btn {
-      width: 100%; background: none; border: none;
-      font-size: .78rem; color: #f5576c; cursor: pointer;
-      padding: 3px 0; font-family: inherit; font-weight: 600;
-      text-align: left;
+    .sticker-area-label {
+      font-size: .68rem; color: #aaa; font-weight: 700;
+      padding-bottom: 4px; display: block;
     }
 
     /* 팔레트 패널 */
-    .sticker-panel { display: none; margin-top: 5px; }
-    .sticker-panel.open { display: block; }
+    .sticker-panel { display: block; }
 
     /* 카테고리 탭 */
     .sticker-tabs {
@@ -260,7 +257,7 @@
     /* 이모지 그리드 */
     .sticker-grid {
       display: flex; flex-wrap: wrap; gap: 2px;
-      max-height: 84px; overflow-y: auto;
+      max-height: 100px; overflow-y: auto;
       scrollbar-width: thin; scrollbar-color: #f5576c #f0f0f0;
     }
     .sticker-grid::-webkit-scrollbar { width: 4px; }
@@ -800,7 +797,7 @@ function renderPreviews() {
           </select>
         </div>
         <div class="sticker-area">
-          <button class="sticker-toggle-btn">🎨 스티커 추가</button>
+          <span class="sticker-area-label">🎨 스티커</span>
           <div class="sticker-panel">${buildPaletteHTML()}</div>
         </div>
       </div>
@@ -909,12 +906,8 @@ function renderPreviews() {
       if (hasGenerated) scheduleRegen();
     });
 
-    // 팔레트 토글
-    const toggleBtn = item.querySelector('.sticker-toggle-btn');
-    const panel     = item.querySelector('.sticker-panel');
-    toggleBtn.addEventListener('click', () => panel.classList.toggle('open'));
-
     // 카테고리 탭
+    const panel  = item.querySelector('.sticker-panel');
     const tabsEl = panel.querySelector('.sticker-tabs');
     const gridEl = panel.querySelector('.sticker-grid');
     tabsEl.addEventListener('click', e => {
