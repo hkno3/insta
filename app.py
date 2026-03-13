@@ -3,6 +3,7 @@ import os
 import platform
 import shutil
 import subprocess
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -14,8 +15,10 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB limit
 
 UPLOAD_FOLDER = Path('uploads')
 OUTPUT_FOLDER = Path('outputs')
+EMOJI_CACHE   = Path('emoji_cache')
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 OUTPUT_FOLDER.mkdir(exist_ok=True)
+EMOJI_CACHE.mkdir(exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'}
 VIDEO_WIDTH = 1080
@@ -111,19 +114,94 @@ def run_ffmpeg(cmd: list) -> tuple[bool, str]:
     return result.returncode == 0, stderr
 
 
-def make_clip(img_path: Path, clip_path: Path, duration: float, caption: str = '') -> tuple[bool, str]:
-    """단일 이미지 → 클립 (자막 포함)."""
-    filters = [f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}']
+# ── 이모지 스티커 ──────────────────────────────────────────
+
+def emoji_to_codepoint(emoji: str) -> str:
+    """이모지 문자 → twemoji 파일명 코드포인트 문자열."""
+    return '-'.join(f'{ord(c):x}' for c in emoji)
+
+
+def get_twemoji_png(emoji: str) -> Path | None:
+    """Twemoji CDN에서 PNG를 다운로드하고 캐시. 실패 시 None 반환."""
+    cp = emoji_to_codepoint(emoji)
+    cache_path = EMOJI_CACHE / f'{cp}.png'
+    if cache_path.exists():
+        return cache_path
+    base = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72'
+    try:
+        urllib.request.urlretrieve(f'{base}/{cp}.png', cache_path)
+        return cache_path
+    except Exception:
+        pass
+    # FE0F(변형 선택자) 없이 재시도
+    cp2 = '-'.join(p for p in cp.split('-') if p != 'fe0f')
+    if cp2 != cp:
+        cache_path2 = EMOJI_CACHE / f'{cp2}.png'
+        if cache_path2.exists():
+            return cache_path2
+        try:
+            urllib.request.urlretrieve(f'{base}/{cp2}.png', cache_path2)
+            return cache_path2
+        except Exception:
+            pass
+    app.logger.warning(f'twemoji 다운로드 실패: {emoji} ({cp})')
+    return None
+
+
+# ── 클립 생성 ──────────────────────────────────────────────
+
+def make_clip(img_path: Path, clip_path: Path, duration: float,
+              caption: str = '', stickers: list | None = None) -> tuple[bool, str]:
+    """단일 이미지 → 클립 (자막 + 이모지 스티커 포함)."""
     cap = build_caption_filter(caption)
+
+    # 유효한 스티커만 필터링 (PNG 다운로드 성공한 것만)
+    valid = []
+    for s in (stickers or []):
+        png = get_twemoji_png(s['emoji'])
+        if png:
+            valid.append({**s, 'png': str(png)})
+
+    if not valid:
+        # 스티커 없음 → 단순 -vf
+        filters = [f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}']
+        if cap:
+            filters.append(cap)
+        cmd = [
+            'ffmpeg', '-y',
+            '-loop', '1', '-i', str(img_path),
+            '-t', str(duration),
+            '-vf', ','.join(filters),
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
+            str(clip_path),
+        ]
+        return run_ffmpeg(cmd)
+
+    # 스티커 있음 → filter_complex
+    cmd = ['ffmpeg', '-y', '-loop', '1', '-i', str(img_path)]
+    for s in valid:
+        cmd += ['-i', s['png']]
+
+    base_filter = f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}'
     if cap:
-        filters.append(cap)
-    cmd = [
-        'ffmpeg', '-y',
-        '-loop', '1', '-i', str(img_path),
+        base_filter += f',{cap}'
+
+    fc = [f'[0:v]{base_filter}[base]']
+    prev = 'base'
+    for idx, s in enumerate(valid):
+        size_px = max(40, int(float(s.get('size', 0.15)) * VIDEO_WIDTH))
+        x_px    = max(0, min(VIDEO_WIDTH  - size_px, int(float(s['x']) * VIDEO_WIDTH)))
+        y_px    = max(0, min(VIDEO_HEIGHT - size_px, int(float(s['y']) * VIDEO_HEIGHT)))
+        fc.append(f'[{idx+1}:v]scale={size_px}:{size_px}[s{idx}]')
+        out = f'v{idx}'
+        fc.append(f'[{prev}][s{idx}]overlay={x_px}:{y_px}[{out}]')
+        prev = out
+
+    cmd += [
         '-t', str(duration),
-        '-vf', ','.join(filters),
-        '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-        '-r', '30',
+        '-filter_complex', ';'.join(fc),
+        '-map', f'[{prev}]',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
         str(clip_path),
     ]
     return run_ffmpeg(cmd)
@@ -154,7 +232,7 @@ def merge_two_clips(clip_a: Path, clip_b: Path, output: Path,
             str(output),
         ]
         ok, err = run_ffmpeg(cmd)
-        return ok, err, dur_a  # duration은 concat 후 ffprobe로 정확히 알 수 있지만 근사치 사용
+        return ok, err, dur_a
 
     xfade_name = transition if transition in XFADE_TRANSITIONS else 'fade'
     offset = max(dur_a - TRANS_DUR, 0)
@@ -174,11 +252,8 @@ def merge_two_clips(clip_a: Path, clip_b: Path, output: Path,
 
 def make_video(image_paths: list[Path], output_path: Path,
                duration: float, transitions: list[str],
-               captions: list[str] | None = None) -> tuple[bool, str]:
-    """
-    transitions[i] = 사진 i에서 사진 i+1로 넘어갈 때의 전환 효과
-    ('fade' | 'slide' | 'none')
-    """
+               captions: list[str] | None = None,
+               stickers_per_photo: list[list] | None = None) -> tuple[bool, str]:
     n = len(image_paths)
     if captions is None:
         captions = [''] * n
@@ -186,15 +261,18 @@ def make_video(image_paths: list[Path], output_path: Path,
         captions.append('')
     while len(transitions) < n:
         transitions.append('none')
+    if stickers_per_photo is None:
+        stickers_per_photo = [[] for _ in range(n)]
+    while len(stickers_per_photo) < n:
+        stickers_per_photo.append([])
 
     tmp_dir = output_path.parent / f'clips_{output_path.stem}'
     tmp_dir.mkdir(exist_ok=True)
 
-    # 1단계: 개별 클립 생성
     clips = []
     for i, (img, cap) in enumerate(zip(image_paths, captions)):
         clip = tmp_dir / f'clip_{i:03d}.mp4'
-        ok, err = make_clip(img, clip, duration, cap)
+        ok, err = make_clip(img, clip, duration, cap, stickers_per_photo[i])
         if not ok:
             _cleanup(tmp_dir)
             return False, err
@@ -205,7 +283,6 @@ def make_video(image_paths: list[Path], output_path: Path,
         _cleanup(tmp_dir)
         return True, ''
 
-    # 2단계: 순서대로 전환 효과 적용
     current = clips[0]
     current_dur = duration
 
@@ -217,7 +294,7 @@ def make_video(image_paths: list[Path], output_path: Path,
             _cleanup(tmp_dir)
             return False, err
         current = merged
-        current_dur += duration  # 근사 누적
+        current_dur += duration
 
     shutil.copy2(current, output_path)
     _cleanup(tmp_dir)
@@ -239,8 +316,9 @@ def index():
 def create_video():
     files = request.files.getlist('photos')
     duration = float(request.form.get('duration', 3.0))
-    captions_json = request.form.get('captions', '[]')
+    captions_json    = request.form.get('captions',    '[]')
     transitions_json = request.form.get('transitions', '[]')
+    stickers_json    = request.form.get('stickers',    '[]')
 
     try:
         captions = json.loads(captions_json)
@@ -250,6 +328,10 @@ def create_video():
         transitions = json.loads(transitions_json)
     except Exception:
         transitions = []
+    try:
+        stickers_per_photo = json.loads(stickers_json)
+    except Exception:
+        stickers_per_photo = []
 
     if not files or all(f.filename == '' for f in files):
         return jsonify({'error': '사진을 하나 이상 업로드해 주세요.'}), 400
@@ -278,7 +360,9 @@ def create_video():
         return jsonify({'error': '유효한 이미지 파일이 없습니다.'}), 400
 
     output_path = OUTPUT_FOLDER / f'{job_id}.mp4'
-    success, err_msg = make_video(prepared, output_path, duration, transitions, captions)
+    success, err_msg = make_video(
+        prepared, output_path, duration, transitions, captions, stickers_per_photo
+    )
 
     if not success:
         return jsonify({'error': f'영상 생성 실패: {err_msg[:300] if err_msg else "ffmpeg 오류"}'}), 500

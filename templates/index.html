@@ -154,6 +154,66 @@
       display: block;
     }
 
+    /* ── 스티커 ── */
+    .sticker-area {
+      border-top: 1.5px solid #f0f0f0;
+      background: #fafafa;
+      padding: 4px 6px;
+    }
+    .sticker-toggle-btn {
+      width: 100%;
+      background: none;
+      border: none;
+      font-size: 0.72rem;
+      color: #f5576c;
+      cursor: pointer;
+      padding: 2px 0;
+      font-family: inherit;
+      font-weight: 600;
+    }
+    .sticker-palette {
+      display: none;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-top: 4px;
+    }
+    .sticker-palette.open { display: flex; }
+    .sticker-palette button {
+      background: none;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      font-size: 1.1rem;
+      padding: 1px 3px;
+      cursor: pointer;
+      line-height: 1.3;
+    }
+    .sticker-palette button:hover { background: #fff0f3; border-color: #f5576c; }
+    .sticker-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-top: 4px;
+    }
+    .sticker-tag {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      background: #fff0f3;
+      border: 1px solid #f5576c;
+      border-radius: 12px;
+      padding: 1px 5px;
+      font-size: 0.85rem;
+    }
+    .sticker-tag .del-sticker {
+      background: none;
+      border: none;
+      color: #f5576c;
+      cursor: pointer;
+      font-size: 0.7rem;
+      padding: 0;
+      line-height: 1;
+    }
+
     /* ── 설정 ── */
     .settings { margin-bottom: 24px; }
     .setting-row {
@@ -336,6 +396,21 @@
 </div>
 
 <script>
+  const STICKER_EMOJIS = [
+    '❤️','🔥','⭐','✨','🎉','😍','😂','🥰','😎','🤩',
+    '👍','🙌','💯','🎵','🌈','🌸','💫','🍀','🦋','🐾',
+    '🍕','🎂','🛫','⚽','🎮','📸','💡','🔑','🌙','☀️',
+  ];
+
+  // 사진별 스티커 목록 (각 항목: {emoji, x, y, size})
+  // 기본 배치 순환 좌표
+  const DEFAULT_POSITIONS = [
+    {x: 0.78, y: 0.05}, {x: 0.05, y: 0.05},
+    {x: 0.78, y: 0.75}, {x: 0.05, y: 0.75},
+    {x: 0.40, y: 0.05},
+  ];
+  let stickersPerPhoto = [];
+
   const TRANSITIONS = [
     {v:'none',       label:'없음 (전환 효과 없이 바로 전환)'},
     {v:'fade',       label:'페이드 (서서히 사라지며 전환)'},
@@ -417,13 +492,31 @@
 
   function addFiles(files) {
     const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    const startIdx = selectedFiles.length;
     selectedFiles = [...selectedFiles, ...imageFiles];
+    for (let i = 0; i < imageFiles.length; i++) stickersPerPhoto.push([]);
     renderPreviews();
   }
 
   function removeFile(index) {
     selectedFiles.splice(index, 1);
+    stickersPerPhoto.splice(index, 1);
     renderPreviews();
+  }
+
+  function renderStickerTags(container, photoIdx) {
+    const tagsEl = container.querySelector('.sticker-tags');
+    tagsEl.innerHTML = '';
+    (stickersPerPhoto[photoIdx] || []).forEach((s, si) => {
+      const tag = document.createElement('span');
+      tag.className = 'sticker-tag';
+      tag.innerHTML = `${s.emoji}<button class="del-sticker" title="제거">✕</button>`;
+      tag.querySelector('.del-sticker').addEventListener('click', () => {
+        stickersPerPhoto[photoIdx].splice(si, 1);
+        renderStickerTags(container, photoIdx);
+      });
+      tagsEl.appendChild(tag);
+    });
   }
 
   function renderPreviews() {
@@ -442,8 +535,30 @@
         <textarea class="caption-input" placeholder="자막 입력 (선택)" rows="2"></textarea>
         <span class="trans-label">↓ 다음으로 전환</span>
         <select class="trans-select">${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===defaultTrans?' selected':''}>${t.label}</option>`).join('')}</select>
+        <div class="sticker-area">
+          <button class="sticker-toggle-btn">🎨 스티커 추가</button>
+          <div class="sticker-palette">${STICKER_EMOJIS.map(e=>`<button>${e}</button>`).join('')}</div>
+          <div class="sticker-tags"></div>
+        </div>
       `;
       item.querySelector('.remove-btn').addEventListener('click', () => removeFile(i));
+
+      // 스티커 팔레트 토글
+      const toggleBtn = item.querySelector('.sticker-toggle-btn');
+      const palette   = item.querySelector('.sticker-palette');
+      toggleBtn.addEventListener('click', () => palette.classList.toggle('open'));
+
+      // 이모지 클릭 → 스티커 추가
+      palette.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const existing = stickersPerPhoto[i] || [];
+          const pos = DEFAULT_POSITIONS[existing.length % DEFAULT_POSITIONS.length];
+          stickersPerPhoto[i] = [...existing, {emoji: btn.textContent, x: pos.x, y: pos.y, size: 0.12}];
+          renderStickerTags(item, i);
+        });
+      });
+
+      renderStickerTags(item, i);
       previewGrid.appendChild(item);
     });
 
@@ -482,6 +597,7 @@
     formData.append('duration', durationRange.value);
     formData.append('captions', JSON.stringify(captions));
     formData.append('transitions', JSON.stringify(transitions));
+    formData.append('stickers', JSON.stringify(stickersPerPhoto));
 
     createBtn.disabled = true;
     statusEl.textContent = '영상을 만드는 중입니다… 잠시만 기다려 주세요.';
