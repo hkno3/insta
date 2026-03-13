@@ -286,6 +286,16 @@ def create_video():
     return jsonify({'video_id': job_id})
 
 
+@app.route('/preview/<video_id>')
+def preview(video_id):
+    if not video_id.isalnum() or len(video_id) != 32:
+        return 'Invalid ID', 400
+    path = OUTPUT_FOLDER / f'{video_id}.mp4'
+    if not path.exists():
+        return 'Not found', 404
+    return send_file(path, mimetype='video/mp4')
+
+
 @app.route('/download/<video_id>')
 def download(video_id):
     if not video_id.isalnum() or len(video_id) != 32:

@@ -244,13 +244,20 @@
       100% { width: 10%; }
     }
 
-    /* ── 다운로드 ── */
+    /* ── 미리보기 + 다운로드 ── */
     #download-area {
       display: none;
       margin-top: 20px;
-      text-align: center;
     }
-    #download-area a {
+    #preview-video {
+      width: 100%;
+      max-height: 480px;
+      border-radius: 14px;
+      background: #000;
+      display: block;
+      margin-bottom: 14px;
+    }
+    .dl-btn {
       display: inline-block;
       padding: 14px 32px;
       background: #27ae60;
@@ -261,8 +268,8 @@
       font-size: 1rem;
       transition: opacity 0.2s;
     }
-    #download-area a:hover { opacity: 0.85; }
-    #download-area p { color: #888; font-size: 0.82rem; margin-top: 8px; }
+    .dl-btn:hover { opacity: 0.85; }
+    #download-area .hint { color: #888; font-size: 0.82rem; margin-top: 8px; text-align: center; }
 
     .error-msg { color: #e74c3c; font-weight: 600; }
 
@@ -320,8 +327,11 @@
   </div>
 
   <div id="download-area">
-    <a id="download-link" href="#" download="instagram_video.mp4">⬇️ 영상 다운로드</a>
-    <p>1080×1920 · MP4 형식</p>
+    <video id="preview-video" controls playsinline></video>
+    <div style="text-align:center;">
+      <a id="download-link" class="dl-btn" href="#" download="instagram_video.mp4">⬇️ 영상 다운로드</a>
+    </div>
+    <p class="hint">자막이나 전환 효과를 바꾼 뒤 "영상 만들기"를 다시 누르면 새로 생성돼요.</p>
   </div>
 </div>
 
@@ -387,6 +397,7 @@
   const progressWrap  = document.getElementById('progress-wrap');
   const downloadArea  = document.getElementById('download-area');
   const downloadLink  = document.getElementById('download-link');
+  const previewVideo  = document.getElementById('preview-video');
 
   let selectedFiles = [];
 
@@ -486,9 +497,14 @@
         statusEl.textContent = '오류: ' + (data.error || '알 수 없는 오류');
         statusEl.className = 'error-msg';
       } else {
-        statusEl.textContent = '영상 생성 완료!';
-        downloadLink.href = '/download/' + data.video_id;
+        statusEl.textContent = '영상 생성 완료! 아래에서 미리보기 후 다운로드하세요.';
+        const vid = data.video_id;
+        previewVideo.src = '/preview/' + vid + '?t=' + Date.now();
+        previewVideo.load();
+        previewVideo.play().catch(() => {});
+        downloadLink.href = '/download/' + vid;
         downloadArea.style.display = 'block';
+        downloadArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     } catch (err) {
       statusEl.textContent = '네트워크 오류가 발생했습니다.';
