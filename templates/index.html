@@ -148,6 +148,31 @@
     .sticker-node:hover .sticker-resize,
     .sticker-node.active .sticker-resize { display: block; }
 
+    /* ── 자막 스타일 행 ── */
+    .caption-style-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 5px 10px; border-bottom: 1.5px solid #f0f0f0;
+    }
+    .style-label-sm { font-size: .68rem; color: #aaa; white-space: nowrap; flex-shrink: 0; }
+    .color-swatches { display: flex; gap: 3px; align-items: center; }
+    .cswatch {
+      width: 18px; height: 18px; border-radius: 50%; border: 2px solid #ddd;
+      cursor: pointer; padding: 0; flex-shrink: 0;
+      transition: transform .15s, border-color .15s;
+    }
+    .cswatch:hover { transform: scale(1.2); }
+    .cswatch.active { border-color: #f5576c; transform: scale(1.18); }
+    .caption-color-picker {
+      width: 24px; height: 20px; border: 1.5px solid #ddd; border-radius: 5px;
+      padding: 0; cursor: pointer; background: none; flex-shrink: 0;
+    }
+    .font-size-input {
+      width: 50px; padding: 2px 5px; font-size: .78rem;
+      border: 1.5px solid #ddd; border-radius: 7px; outline: none;
+      text-align: center; font-family: inherit;
+    }
+    .font-size-input:focus { border-color: #f5576c; }
+
     /* ── 자막 / 전환 ── */
     .caption-input {
       flex: 1;
@@ -694,6 +719,19 @@ function renderPreviews() {
       </div>
       <div class="preview-controls">
         <textarea class="caption-input" placeholder="자막을 입력하세요 (선택사항)"></textarea>
+        <div class="caption-style-row">
+          <span class="style-label-sm">색상</span>
+          <div class="color-swatches">
+            <button class="cswatch active" data-color="white"   style="background:#fff;"    title="흰색"></button>
+            <button class="cswatch"        data-color="yellow"  style="background:#FFD700;" title="노란색"></button>
+            <button class="cswatch"        data-color="#FF6B6B" style="background:#FF6B6B;" title="빨간색"></button>
+            <button class="cswatch"        data-color="#4ECDC4" style="background:#4ECDC4;" title="민트"></button>
+            <button class="cswatch"        data-color="black"   style="background:#111;"    title="검은색"></button>
+            <input type="color" class="caption-color-picker" value="#ffffff" title="색상 직접 선택" />
+          </div>
+          <span class="style-label-sm">크기</span>
+          <input type="number" class="font-size-input" value="55" min="20" max="120" step="5" title="글자 크기(px)" />
+        </div>
         <div class="trans-row">
           <span class="trans-label">↓ 전환</span>
           <select class="trans-select">
@@ -710,6 +748,24 @@ function renderPreviews() {
     item.querySelector('.remove-photo-btn').addEventListener('click', () => removeFile(i));
     item.querySelector('.caption-input').addEventListener('input', () => { if (hasGenerated) scheduleRegen(); });
     item.querySelector('.trans-select').addEventListener('change', () => { if (hasGenerated) scheduleRegen(); });
+
+    // Caption color swatches
+    const swatches    = item.querySelectorAll('.cswatch');
+    const colorPicker = item.querySelector('.caption-color-picker');
+    swatches.forEach(sw => {
+      sw.addEventListener('click', () => {
+        swatches.forEach(s => s.classList.remove('active'));
+        sw.classList.add('active');
+        const col = sw.dataset.color;
+        if (col.startsWith('#')) colorPicker.value = col;
+        if (hasGenerated) scheduleRegen();
+      });
+    });
+    colorPicker.addEventListener('input', () => {
+      swatches.forEach(s => s.classList.remove('active'));
+      if (hasGenerated) scheduleRegen();
+    });
+    item.querySelector('.font-size-input').addEventListener('input', () => { if (hasGenerated) scheduleRegen(); });
 
     // 팔레트 토글
     const toggleBtn = item.querySelector('.sticker-toggle-btn');
@@ -793,13 +849,21 @@ function scheduleRegen() {
 function collectFormData() {
   const captions    = Array.from(previewGrid.querySelectorAll('.caption-input')).map(el => el.value.trim());
   const transitions = Array.from(previewGrid.querySelectorAll('.trans-select')).map(el => el.value);
+  const captionStyles = Array.from(previewGrid.querySelectorAll('.preview-controls')).map(ctrl => {
+    const activeSw  = ctrl.querySelector('.cswatch.active');
+    const picker    = ctrl.querySelector('.caption-color-picker');
+    const color     = activeSw ? activeSw.dataset.color : picker.value;
+    const fontSize  = parseInt(ctrl.querySelector('.font-size-input').value) || 55;
+    return { color, fontSize };
+  });
   const fd = new FormData();
   selectedFiles.forEach(f => fd.append('photos', f));
-  fd.append('duration',    durationRange.value);
-  fd.append('captions',    JSON.stringify(captions));
-  fd.append('transitions', JSON.stringify(transitions));
-  fd.append('stickers',    JSON.stringify(stickersPerPhoto));
-  fd.append('format',      selectedFormat);
+  fd.append('duration',       durationRange.value);
+  fd.append('captions',       JSON.stringify(captions));
+  fd.append('transitions',    JSON.stringify(transitions));
+  fd.append('stickers',       JSON.stringify(stickersPerPhoto));
+  fd.append('caption_styles', JSON.stringify(captionStyles));
+  fd.append('format',         selectedFormat);
   return fd;
 }
 
