@@ -26,7 +26,6 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.15);
       transition: max-width 0.4s ease;
     }
-    /* 좌우 분할 모드 */
     .card.edit-mode {
       max-width: 1180px;
       display: grid;
@@ -34,383 +33,211 @@
       gap: 40px;
       align-items: start;
     }
-    .left-panel { min-width: 0; }
-    .right-panel {
-      min-width: 0;
-      position: sticky;
-      top: 24px;
-    }
+    .left-panel  { min-width: 0; }
+    .right-panel { min-width: 0; position: sticky; top: 24px; }
 
     h1 {
-      font-size: 1.8rem;
-      font-weight: 800;
-      text-align: center;
+      font-size: 1.8rem; font-weight: 800; text-align: center;
       background: linear-gradient(90deg, #f5576c, #fda085);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       margin-bottom: 8px;
     }
-    .subtitle {
-      text-align: center;
-      color: #888;
-      font-size: 0.9rem;
-      margin-bottom: 32px;
-    }
+    .subtitle { text-align: center; color: #888; font-size: 0.9rem; margin-bottom: 32px; }
 
-    /* ── 드래그 앤 드롭 존 ── */
+    /* ── 업로드 존 ── */
     .drop-zone {
-      border: 2.5px dashed #f5576c;
-      border-radius: 16px;
-      padding: 40px 20px;
-      text-align: center;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
-      margin-bottom: 20px;
+      border: 2.5px dashed #f5576c; border-radius: 16px;
+      padding: 40px 20px; text-align: center; cursor: pointer;
+      transition: background .2s, border-color .2s; margin-bottom: 20px;
     }
-    .drop-zone:hover, .drop-zone.dragover {
-      background: #fff0f3;
-      border-color: #f093fb;
-    }
+    .drop-zone:hover, .drop-zone.dragover { background: #fff0f3; border-color: #f093fb; }
     .drop-zone .icon { font-size: 3rem; margin-bottom: 12px; }
-    .drop-zone p { color: #555; font-size: 0.95rem; }
+    .drop-zone p { color: #555; font-size: .95rem; }
     .drop-zone span { color: #f5576c; font-weight: 700; }
     #file-input { display: none; }
 
     /* ── 미리보기 그리드 ── */
     #preview-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      gap: 12px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px; margin-bottom: 24px;
     }
     .preview-item {
-      display: flex;
-      flex-direction: column;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.12);
-      background: #fff;
-    }
-    .preview-img-wrap {
-      position: relative;
-      aspect-ratio: 9/16;
-      background: #000;
-    }
-    .preview-img-wrap img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .order-badge {
-      position: absolute;
-      top: 5px;
-      left: 5px;
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      font-size: 0.7rem;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 6px;
-    }
-    .remove-btn {
-      position: absolute;
-      top: 5px;
-      right: 5px;
-      background: #f5576c;
-      color: #fff;
-      border: none;
-      border-radius: 50%;
-      width: 20px;
-      height: 20px;
-      font-size: 0.8rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; flex-direction: column;
+      border-radius: 12px; background: #fff;
+      box-shadow: 0 2px 10px rgba(0,0,0,.12);
     }
 
-    /* ── 자막 / 전환 입력 ── */
+    /* 이미지 래퍼 — overflow visible 이어야 스티커 remove btn이 안 잘림 */
+    .preview-img-wrap {
+      position: relative; aspect-ratio: 9/16; background: #000;
+      border-radius: 12px 12px 0 0; overflow: hidden;
+    }
+    .preview-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .order-badge {
+      position: absolute; top: 5px; left: 5px;
+      background: rgba(0,0,0,.6); color: #fff; font-size: .7rem;
+      font-weight: 700; padding: 2px 6px; border-radius: 6px; pointer-events: none;
+    }
+    .remove-photo-btn {
+      position: absolute; top: 5px; right: 5px;
+      background: #f5576c; color: #fff; border: none;
+      border-radius: 50%; width: 20px; height: 20px;
+      font-size: .8rem; cursor: pointer; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── 스티커 오버레이 ── */
+    .sticker-layer {
+      position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    }
+    .sticker-node {
+      position: absolute;
+      cursor: grab;
+      user-select: none;
+      pointer-events: all;
+      display: flex; align-items: center; justify-content: center;
+      /* 테두리는 hover/selected 시에만 */
+    }
+    .sticker-node:hover  { outline: 1.5px dashed rgba(245,87,108,.7); outline-offset: 1px; }
+    .sticker-node.active { outline: 2px solid #f5576c; outline-offset: 1px; cursor: grabbing; }
+
+    .sticker-emoji { line-height: 1; pointer-events: none; }
+
+    /* × 삭제 버튼 — 상단 왼쪽 */
+    .sticker-del {
+      position: absolute; top: -7px; left: -7px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #f5576c; color: #fff; border: none;
+      font-size: .65rem; cursor: pointer;
+      display: none; align-items: center; justify-content: center;
+      z-index: 20; line-height: 1;
+    }
+    .sticker-node:hover .sticker-del,
+    .sticker-node.active .sticker-del { display: flex; }
+
+    /* ↔ 리사이즈 핸들 — 우하단 */
+    .sticker-resize {
+      position: absolute; bottom: -5px; right: -5px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; border: 2px solid #f5576c;
+      cursor: se-resize; z-index: 20;
+      display: none;
+    }
+    .sticker-node:hover .sticker-resize,
+    .sticker-node.active .sticker-resize { display: block; }
+
+    /* ── 자막 / 전환 ── */
     .caption-input {
-      width: 100%;
-      padding: 6px 8px;
-      font-size: 0.78rem;
-      border: none;
-      border-top: 1.5px solid #f0f0f0;
-      outline: none;
-      background: #fafafa;
-      color: #333;
-      resize: none;
-      font-family: inherit;
+      width: 100%; padding: 6px 8px; font-size: .78rem;
+      border: none; border-top: 1.5px solid #f0f0f0;
+      outline: none; background: #fafafa; color: #333;
+      resize: none; font-family: inherit;
     }
     .caption-input::placeholder { color: #bbb; }
     .caption-input:focus { background: #fff0f3; border-top-color: #f5576c; }
 
     .trans-select {
-      width: 100%;
-      padding: 5px 8px;
-      font-size: 0.75rem;
-      border: none;
-      border-top: 1.5px solid #f0f0f0;
-      outline: none;
-      background: #f5f5f5;
-      color: #555;
-      cursor: pointer;
-      font-family: inherit;
+      width: 100%; padding: 5px 8px; font-size: .75rem;
+      border: none; border-top: 1.5px solid #f0f0f0;
+      outline: none; background: #f5f5f5; color: #555;
+      cursor: pointer; font-family: inherit;
     }
     .trans-select:focus { background: #fff0f3; border-top-color: #f5576c; }
-    .trans-label {
-      font-size: 0.68rem;
-      color: #aaa;
-      padding: 3px 8px 0;
-      background: #f5f5f5;
-      display: block;
-    }
+    .trans-label { font-size: .68rem; color: #aaa; padding: 3px 8px 0; background: #f5f5f5; display: block; }
 
-    /* ── 스티커 ── */
+    /* ── 스티커 팔레트 버튼 영역 ── */
     .sticker-area {
-      border-top: 1.5px solid #f0f0f0;
-      background: #fafafa;
-      padding: 4px 6px;
+      border-top: 1.5px solid #f0f0f0; background: #fafafa; padding: 4px 6px;
+      border-radius: 0 0 12px 12px;
     }
     .sticker-toggle-btn {
-      width: 100%;
-      background: none;
-      border: none;
-      font-size: 0.72rem;
-      color: #f5576c;
-      cursor: pointer;
-      padding: 2px 0;
-      font-family: inherit;
-      font-weight: 600;
+      width: 100%; background: none; border: none;
+      font-size: .72rem; color: #f5576c; cursor: pointer;
+      padding: 2px 0; font-family: inherit; font-weight: 600;
     }
     .sticker-palette {
-      display: none;
-      flex-wrap: wrap;
-      gap: 3px;
-      margin-top: 4px;
+      display: none; flex-wrap: wrap; gap: 3px; margin-top: 4px;
     }
     .sticker-palette.open { display: flex; }
     .sticker-palette button {
-      background: none;
-      border: 1px solid #eee;
-      border-radius: 6px;
-      font-size: 1.1rem;
-      padding: 1px 3px;
-      cursor: pointer;
-      line-height: 1.3;
+      background: none; border: 1px solid #eee; border-radius: 6px;
+      font-size: 1.1rem; padding: 1px 3px; cursor: pointer; line-height: 1.3;
     }
     .sticker-palette button:hover { background: #fff0f3; border-color: #f5576c; }
-    .sticker-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 3px;
-      margin-top: 4px;
-    }
-    .sticker-tag {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      background: #fff0f3;
-      border: 1px solid #f5576c;
-      border-radius: 12px;
-      padding: 1px 5px;
-      font-size: 0.85rem;
-    }
-    .sticker-tag .del-sticker {
-      background: none;
-      border: none;
-      color: #f5576c;
-      cursor: pointer;
-      font-size: 0.7rem;
-      padding: 0;
-      line-height: 1;
-    }
 
     /* ── 설정 ── */
     .settings { margin-bottom: 24px; }
-    .setting-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    .setting-row label {
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: #333;
-    }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .setting-row label { font-size: .9rem; font-weight: 600; color: #333; }
     .setting-row .control { display: flex; align-items: center; gap: 8px; }
 
     input[type=range] {
-      -webkit-appearance: none;
-      width: 150px;
-      height: 6px;
-      background: #f5576c;
-      border-radius: 3px;
-      outline: none;
+      -webkit-appearance: none; width: 150px; height: 6px;
+      background: #f5576c; border-radius: 3px; outline: none;
     }
     input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 18px;
-      height: 18px;
-      background: #fff;
-      border: 2.5px solid #f5576c;
-      border-radius: 50%;
-      cursor: pointer;
+      -webkit-appearance: none; width: 18px; height: 18px;
+      background: #fff; border: 2.5px solid #f5576c; border-radius: 50%; cursor: pointer;
     }
     #duration-label { font-weight: 700; color: #f5576c; width: 36px; text-align: right; }
 
     select {
-      border: 1.5px solid #ddd;
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 0.9rem;
-      color: #333;
-      background: #fff;
-      outline: none;
-      cursor: pointer;
+      border: 1.5px solid #ddd; border-radius: 8px; padding: 6px 10px;
+      font-size: .9rem; color: #333; background: #fff; outline: none; cursor: pointer;
     }
     select:focus { border-color: #f5576c; }
 
     /* ── 버튼 ── */
     #create-btn {
-      width: 100%;
-      padding: 16px;
+      width: 100%; padding: 16px;
       background: linear-gradient(90deg, #f5576c, #fda085);
-      color: #fff;
-      font-size: 1.05rem;
-      font-weight: 700;
-      border: none;
-      border-radius: 14px;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
+      color: #fff; font-size: 1.05rem; font-weight: 700;
+      border: none; border-radius: 14px; cursor: pointer;
+      transition: opacity .2s, transform .1s;
     }
-    #create-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
-    #create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #create-btn:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+    #create-btn:disabled { opacity: .5; cursor: not-allowed; }
 
     /* ── 우측 패널 ── */
-    .right-panel-inner {
-      background: #f9f9f9;
-      border-radius: 20px;
-      padding: 24px;
-    }
-    .right-panel-title {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #aaa;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 14px;
-      text-align: center;
-    }
+    .right-panel-inner { background: #f9f9f9; border-radius: 20px; padding: 24px; }
+    .right-panel-title { font-size: .85rem; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px; text-align: center; }
 
-    /* ── 진행 상태 ── */
-    #status {
-      text-align: center;
-      font-size: 0.9rem;
-      color: #555;
-      min-height: 24px;
-    }
-    .progress-bar-wrap {
-      height: 8px;
-      background: #f0f0f0;
-      border-radius: 4px;
-      margin-top: 10px;
-      overflow: hidden;
-      display: none;
-    }
-    .progress-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #f5576c, #fda085);
-      border-radius: 4px;
-      animation: progress-anim 2s ease-in-out infinite;
-    }
-    @keyframes progress-anim {
-      0%   { width: 10%; }
-      50%  { width: 80%; }
-      100% { width: 10%; }
-    }
+    #status { text-align: center; font-size: .9rem; color: #555; min-height: 24px; }
+    .progress-bar-wrap { height: 8px; background: #f0f0f0; border-radius: 4px; margin-top: 10px; overflow: hidden; display: none; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #f5576c, #fda085); border-radius: 4px; animation: progress-anim 2s ease-in-out infinite; }
+    @keyframes progress-anim { 0%{width:10%} 50%{width:80%} 100%{width:10%} }
 
-    /* ── 영상 래퍼 + 오버레이 ── */
-    .video-wrap {
-      position: relative;
-      border-radius: 14px;
-      overflow: hidden;
-      background: #000;
-      margin-top: 14px;
-    }
-    #preview-video {
-      width: 100%;
-      max-height: 480px;
-      display: block;
-    }
+    .video-wrap { position: relative; border-radius: 14px; overflow: hidden; background: #000; margin-top: 14px; }
+    #preview-video { width: 100%; max-height: 480px; display: block; }
     .video-overlay {
-      display: none;
-      position: absolute;
-      inset: 0;
-      background: rgba(0,0,0,0.55);
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 10px;
-      color: #fff;
-      font-size: 0.9rem;
-      font-weight: 600;
+      display: none; position: absolute; inset: 0;
+      background: rgba(0,0,0,.55);
+      align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+      color: #fff; font-size: .9rem; font-weight: 600;
     }
     .video-overlay.show { display: flex; }
-    .spinner {
-      width: 36px;
-      height: 36px;
-      border: 3px solid rgba(255,255,255,0.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
+    .spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── 변경 감지 배너 ── */
     #change-banner {
-      display: none;
-      background: #fff8e1;
-      border: 1.5px solid #fda085;
-      border-radius: 10px;
-      padding: 8px 14px;
-      font-size: 0.82rem;
-      color: #c0392b;
-      font-weight: 600;
-      text-align: center;
-      margin-bottom: 14px;
+      display: none; background: #fff8e1; border: 1.5px solid #fda085;
+      border-radius: 10px; padding: 8px 14px; font-size: .82rem;
+      color: #c0392b; font-weight: 600; text-align: center; margin-bottom: 14px;
     }
 
-    /* ── 다운로드 ── */
-    #download-area {
-      display: none;
-      margin-top: 14px;
-      text-align: center;
-    }
+    #download-area { display: none; margin-top: 14px; text-align: center; }
     .dl-btn {
-      display: inline-block;
-      padding: 14px 32px;
-      background: #27ae60;
-      color: #fff;
-      font-weight: 700;
-      border-radius: 12px;
-      text-decoration: none;
-      font-size: 1rem;
-      transition: opacity 0.2s;
+      display: inline-block; padding: 14px 32px; background: #27ae60;
+      color: #fff; font-weight: 700; border-radius: 12px;
+      text-decoration: none; font-size: 1rem; transition: opacity .2s;
     }
-    .dl-btn:hover { opacity: 0.85; }
-    #download-area .hint { color: #888; font-size: 0.82rem; margin-top: 8px; }
+    .dl-btn:hover { opacity: .85; }
+    #download-area .hint { color: #888; font-size: .82rem; margin-top: 8px; }
 
     .error-msg { color: #e74c3c; font-weight: 600; }
-    .section-title {
-      font-size: 0.82rem;
-      font-weight: 700;
-      color: #aaa;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 10px;
-    }
+    .section-title { font-size: .82rem; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
   </style>
 </head>
 <body>
@@ -424,7 +251,7 @@
     <div class="drop-zone" id="drop-zone">
       <div class="icon">🖼️</div>
       <p><span>클릭</span>하거나 사진을 여기에 드래그하세요</p>
-      <p style="font-size:0.8rem; color:#aaa; margin-top:6px;">JPG, PNG, WEBP 등 · 여러 장 동시 선택 가능</p>
+      <p style="font-size:.8rem;color:#aaa;margin-top:6px;">JPG, PNG, WEBP 등 · 여러 장 동시 선택 가능</p>
       <input type="file" id="file-input" accept="image/*" multiple />
     </div>
 
@@ -443,35 +270,26 @@
       </div>
       <div class="setting-row">
         <label>기본 전환 효과</label>
-        <div class="control">
-          <select id="transition-select"></select>
-        </div>
+        <div class="control"><select id="transition-select"></select></div>
       </div>
     </div>
 
     <button id="create-btn" disabled>영상 만들기</button>
   </div>
 
-  <!-- ── 오른쪽 패널 (최초 생성 후 표시) ── -->
+  <!-- ── 오른쪽 패널 ── -->
   <div class="right-panel" id="right-panel" style="display:none;">
     <div class="right-panel-inner">
       <p class="right-panel-title">🎬 미리보기</p>
-
       <div id="change-banner">⚡ 설정이 변경됐어요 — 2초 후 재생성…</div>
-
       <div id="status"></div>
-      <div class="progress-bar-wrap" id="progress-wrap">
-        <div class="progress-bar"></div>
-      </div>
-
+      <div class="progress-bar-wrap" id="progress-wrap"><div class="progress-bar"></div></div>
       <div class="video-wrap" id="video-wrap" style="display:none;">
         <video id="preview-video" controls playsinline></video>
         <div class="video-overlay" id="video-overlay">
-          <div class="spinner"></div>
-          <span>재생성 중…</span>
+          <div class="spinner"></div><span>재생성 중…</span>
         </div>
       </div>
-
       <div id="download-area">
         <a id="download-link" class="dl-btn" href="#" download="instagram_video.mp4">⬇️ 영상 다운로드</a>
         <p class="hint">설정을 바꾸면 자동으로 재생성돼요.</p>
@@ -479,289 +297,478 @@
     </div>
   </div>
 
-</div>
+</div><!-- .card -->
 
 <script>
-  const STICKER_EMOJIS = [
-    '❤️','🔥','⭐','✨','🎉','😍','😂','🥰','😎','🤩',
-    '👍','🙌','💯','🎵','🌈','🌸','💫','🍀','🦋','🐾',
-    '🍕','🎂','🛫','⚽','🎮','📸','💡','🔑','🌙','☀️',
-  ];
-  const DEFAULT_POSITIONS = [
-    {x: 0.78, y: 0.05}, {x: 0.05, y: 0.05},
-    {x: 0.78, y: 0.75}, {x: 0.05, y: 0.75},
-    {x: 0.40, y: 0.05},
-  ];
-  let stickersPerPhoto = [];
+/* ─────────────────────────────────────────
+   상수
+───────────────────────────────────────── */
+const STICKER_EMOJIS = [
+  '❤️','🔥','⭐','✨','🎉','😍','😂','🥰','😎','🤩',
+  '👍','🙌','💯','🎵','🌈','🌸','💫','🍀','🦋','🐾',
+  '🍕','🎂','🛫','⚽','🎮','📸','💡','🔑','🌙','☀️',
+];
+// 새 스티커 기본 배치 좌표 (top-left 기준, 0~1 상대값)
+const DEFAULT_POS = [
+  {x:.78, y:.05}, {x:.05, y:.05},
+  {x:.78, y:.75}, {x:.05, y:.75},
+  {x:.40, y:.05},
+];
+const VIDEO_RATIO = 16 / 9; // height / width
 
-  const TRANSITIONS = [
-    {v:'none',       label:'없음 (전환 효과 없이 바로 전환)'},
-    {v:'fade',       label:'페이드 (서서히 사라지며 전환)'},
-    {v:'fadeblack',  label:'페이드 블랙 (검은 화면으로 전환)'},
-    {v:'fadewhite',  label:'페이드 화이트 (흰 화면으로 전환)'},
-    {v:'dissolve',   label:'디졸브 (픽셀이 녹아들며 전환)'},
-    {v:'wipeleft',   label:'와이프 왼쪽 (오른쪽→왼쪽으로 덮기)'},
-    {v:'wiperight',  label:'와이프 오른쪽 (왼쪽→오른쪽으로 덮기)'},
-    {v:'wipeup',     label:'와이프 위 (아래→위로 덮기)'},
-    {v:'wipedown',   label:'와이프 아래 (위→아래로 덮기)'},
-    {v:'slideleft',  label:'슬라이드 왼쪽 (새 장면이 왼쪽에서 밀려옴)'},
-    {v:'slideright', label:'슬라이드 오른쪽 (새 장면이 오른쪽에서 밀려옴)'},
-    {v:'slideup',    label:'슬라이드 위 (새 장면이 위에서 밀려옴)'},
-    {v:'slidedown',  label:'슬라이드 아래 (새 장면이 아래에서 밀려옴)'},
-    {v:'smoothleft', label:'스무스 왼쪽 (부드럽게 왼쪽으로 밀림)'},
-    {v:'smoothright',label:'스무스 오른쪽 (부드럽게 오른쪽으로 밀림)'},
-    {v:'smoothup',   label:'스무스 위 (부드럽게 위로 밀림)'},
-    {v:'smoothdown', label:'스무스 아래 (부드럽게 아래로 밀림)'},
-    {v:'circlecrop', label:'원형 크롭 (원 모양으로 잘리며 전환)'},
-    {v:'rectcrop',   label:'사각 크롭 (사각형으로 잘리며 전환)'},
-    {v:'circleopen', label:'원형 열기 (원이 커지며 등장)'},
-    {v:'circleclose',label:'원형 닫기 (원이 작아지며 사라짐)'},
-    {v:'vertopen',   label:'세로 열기 (가운데서 위아래로 펼쳐짐)'},
-    {v:'vertclose',  label:'세로 닫기 (위아래에서 가운데로 닫힘)'},
-    {v:'horzopen',   label:'가로 열기 (가운데서 좌우로 펼쳐짐)'},
-    {v:'horzclose',  label:'가로 닫기 (좌우에서 가운데로 닫힘)'},
-    {v:'radial',     label:'방사형 (시계 방향으로 회전하며 전환)'},
-    {v:'distance',   label:'거리 (거리감 있게 중심부터 전환)'},
-    {v:'pixelize',   label:'픽셀화 (픽셀이 뭉쳐지며 전환)'},
-    {v:'diagtl',     label:'대각선 좌상단 (왼쪽 위 모서리부터 전환)'},
-    {v:'diagtr',     label:'대각선 우상단 (오른쪽 위 모서리부터 전환)'},
-    {v:'diagbl',     label:'대각선 좌하단 (왼쪽 아래 모서리부터 전환)'},
-    {v:'diagbr',     label:'대각선 우하단 (오른쪽 아래 모서리부터 전환)'},
-    {v:'hlslice',    label:'가로 슬라이스 (수평선이 잘라지며 전환)'},
-    {v:'hrslice',    label:'가로 역슬라이스 (수평선 역방향 전환)'},
-    {v:'vuslice',    label:'세로 슬라이스 (수직선이 잘라지며 전환)'},
-    {v:'vdslice',    label:'세로 역슬라이스 (수직선 역방향 전환)'},
-    {v:'hblur',      label:'수평 블러 (가로 방향으로 흐려지며 전환)'},
-  ];
+const TRANSITIONS = [
+  {v:'none',       label:'없음 (전환 효과 없이 바로 전환)'},
+  {v:'fade',       label:'페이드 (서서히 사라지며 전환)'},
+  {v:'fadeblack',  label:'페이드 블랙 (검은 화면으로 전환)'},
+  {v:'fadewhite',  label:'페이드 화이트 (흰 화면으로 전환)'},
+  {v:'dissolve',   label:'디졸브 (픽셀이 녹아들며 전환)'},
+  {v:'wipeleft',   label:'와이프 왼쪽 (오른쪽→왼쪽으로 덮기)'},
+  {v:'wiperight',  label:'와이프 오른쪽 (왼쪽→오른쪽으로 덮기)'},
+  {v:'wipeup',     label:'와이프 위 (아래→위로 덮기)'},
+  {v:'wipedown',   label:'와이프 아래 (위→아래로 덮기)'},
+  {v:'slideleft',  label:'슬라이드 왼쪽 (새 장면이 왼쪽에서 밀려옴)'},
+  {v:'slideright', label:'슬라이드 오른쪽 (새 장면이 오른쪽에서 밀려옴)'},
+  {v:'slideup',    label:'슬라이드 위 (새 장면이 위에서 밀려옴)'},
+  {v:'slidedown',  label:'슬라이드 아래 (새 장면이 아래에서 밀려옴)'},
+  {v:'smoothleft', label:'스무스 왼쪽 (부드럽게 왼쪽으로 밀림)'},
+  {v:'smoothright',label:'스무스 오른쪽 (부드럽게 오른쪽으로 밀림)'},
+  {v:'smoothup',   label:'스무스 위 (부드럽게 위로 밀림)'},
+  {v:'smoothdown', label:'스무스 아래 (부드럽게 아래로 밀림)'},
+  {v:'circlecrop', label:'원형 크롭 (원 모양으로 잘리며 전환)'},
+  {v:'rectcrop',   label:'사각 크롭 (사각형으로 잘리며 전환)'},
+  {v:'circleopen', label:'원형 열기 (원이 커지며 등장)'},
+  {v:'circleclose',label:'원형 닫기 (원이 작아지며 사라짐)'},
+  {v:'vertopen',   label:'세로 열기 (가운데서 위아래로 펼쳐짐)'},
+  {v:'vertclose',  label:'세로 닫기 (위아래에서 가운데로 닫힘)'},
+  {v:'horzopen',   label:'가로 열기 (가운데서 좌우로 펼쳐짐)'},
+  {v:'horzclose',  label:'가로 닫기 (좌우에서 가운데로 닫힘)'},
+  {v:'radial',     label:'방사형 (시계 방향으로 회전하며 전환)'},
+  {v:'distance',   label:'거리 (거리감 있게 중심부터 전환)'},
+  {v:'pixelize',   label:'픽셀화 (픽셀이 뭉쳐지며 전환)'},
+  {v:'diagtl',     label:'대각선 좌상단 (왼쪽 위 모서리부터 전환)'},
+  {v:'diagtr',     label:'대각선 우상단 (오른쪽 위 모서리부터 전환)'},
+  {v:'diagbl',     label:'대각선 좌하단 (왼쪽 아래 모서리부터 전환)'},
+  {v:'diagbr',     label:'대각선 우하단 (오른쪽 아래 모서리부터 전환)'},
+  {v:'hlslice',    label:'가로 슬라이스 (수평선이 잘라지며 전환)'},
+  {v:'hrslice',    label:'가로 역슬라이스 (수평선 역방향 전환)'},
+  {v:'vuslice',    label:'세로 슬라이스 (수직선이 잘라지며 전환)'},
+  {v:'vdslice',    label:'세로 역슬라이스 (수직선 역방향 전환)'},
+  {v:'hblur',      label:'수평 블러 (가로 방향으로 흐려지며 전환)'},
+];
 
-  const mainCard       = document.getElementById('main-card');
-  const rightPanel     = document.getElementById('right-panel');
-  const dropZone       = document.getElementById('drop-zone');
-  const fileInput      = document.getElementById('file-input');
-  const previewGrid    = document.getElementById('preview-grid');
-  const previewSection = document.getElementById('preview-section');
-  const createBtn      = document.getElementById('create-btn');
-  const durationRange  = document.getElementById('duration-range');
-  const durationLabel  = document.getElementById('duration-label');
-  const transSelect    = document.getElementById('transition-select');
-  const statusEl       = document.getElementById('status');
-  const progressWrap   = document.getElementById('progress-wrap');
-  const downloadArea   = document.getElementById('download-area');
-  const downloadLink   = document.getElementById('download-link');
-  const previewVideo   = document.getElementById('preview-video');
-  const videoWrap      = document.getElementById('video-wrap');
-  const videoOverlay   = document.getElementById('video-overlay');
-  const changeBanner   = document.getElementById('change-banner');
+/* ─────────────────────────────────────────
+   DOM 참조
+───────────────────────────────────────── */
+const mainCard       = document.getElementById('main-card');
+const rightPanel     = document.getElementById('right-panel');
+const dropZone       = document.getElementById('drop-zone');
+const fileInput      = document.getElementById('file-input');
+const previewGrid    = document.getElementById('preview-grid');
+const previewSection = document.getElementById('preview-section');
+const createBtn      = document.getElementById('create-btn');
+const durationRange  = document.getElementById('duration-range');
+const durationLabel  = document.getElementById('duration-label');
+const transSelect    = document.getElementById('transition-select');
+const statusEl       = document.getElementById('status');
+const progressWrap   = document.getElementById('progress-wrap');
+const downloadArea   = document.getElementById('download-area');
+const downloadLink   = document.getElementById('download-link');
+const previewVideo   = document.getElementById('preview-video');
+const videoWrap      = document.getElementById('video-wrap');
+const videoOverlay   = document.getElementById('video-overlay');
+const changeBanner   = document.getElementById('change-banner');
 
-  // 전환 효과 옵션 채우기
-  TRANSITIONS.forEach(t => {
-    const opt = document.createElement('option');
-    opt.value = t.v;
-    opt.textContent = t.label;
-    if (t.v === 'fade') opt.selected = true;
-    transSelect.appendChild(opt);
+// 전환 효과 옵션
+TRANSITIONS.forEach(t => {
+  const opt = document.createElement('option');
+  opt.value = t.v; opt.textContent = t.label;
+  if (t.v === 'fade') opt.selected = true;
+  transSelect.appendChild(opt);
+});
+
+/* ─────────────────────────────────────────
+   상태
+───────────────────────────────────────── */
+let selectedFiles    = [];
+let stickersPerPhoto = [];  // [{emoji,x,y,size}, ...][]
+let hasGenerated     = false;
+let debounceTimer    = null;
+let isGenerating     = false;
+
+/* ─────────────────────────────────────────
+   드래그 / 리사이즈 전역 상태
+───────────────────────────────────────── */
+let interaction = null;
+// {
+//   type: 'drag' | 'resize',
+//   node: el,          — .sticker-node
+//   photoIdx, stkIdx,
+//   startMx, startMy,  — 마우스 시작 위치
+//   origX, origY,      — 스티커 시작 x, y (0~1)
+//   origSize,          — 스티커 시작 size
+//   W, H               — 컨테이너 크기(px)
+// }
+
+/* ─────────────────────────────────────────
+   스티커 위치/크기 → DOM 적용
+───────────────────────────────────────── */
+function applyToNode(node, s, W, H) {
+  const sizePx = s.size * W;
+  node.style.width    = sizePx + 'px';
+  node.style.height   = sizePx + 'px';
+  node.style.left     = (s.x * W) + 'px';
+  node.style.top      = (s.y * H) + 'px';
+  node.querySelector('.sticker-emoji').style.fontSize = (sizePx * 0.82) + 'px';
+}
+
+/* ─────────────────────────────────────────
+   스티커 노드 생성
+───────────────────────────────────────── */
+function createStickerNode(s, W, H, photoIdx, stkIdx) {
+  const node = document.createElement('div');
+  node.className = 'sticker-node';
+
+  const emojiEl = document.createElement('span');
+  emojiEl.className = 'sticker-emoji';
+  emojiEl.textContent = s.emoji;
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'sticker-del';
+  delBtn.textContent = '×';
+  delBtn.title = '삭제';
+
+  const resizeHandle = document.createElement('div');
+  resizeHandle.className = 'sticker-resize';
+  resizeHandle.title = '크기 조절';
+
+  node.appendChild(emojiEl);
+  node.appendChild(delBtn);
+  node.appendChild(resizeHandle);
+  applyToNode(node, s, W, H);
+
+  // 삭제
+  delBtn.addEventListener('mousedown', e => e.stopPropagation());
+  delBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    stickersPerPhoto[photoIdx].splice(stkIdx, 1);
+    // layer 전체 재렌더
+    const layer = node.parentElement;
+    const item  = layer.closest('.preview-item');
+    refreshStickerLayer(item, photoIdx);
+    if (hasGenerated) scheduleRegen();
   });
 
-  let selectedFiles = [];
-  let hasGenerated  = false;
-  let debounceTimer = null;
-  let isGenerating  = false;
-
-  // ── 드래그 앤 드롭 ──
-  dropZone.addEventListener('click', () => fileInput.click());
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-  dropZone.addEventListener('drop', e => {
+  // 드래그 시작
+  node.addEventListener('mousedown', e => {
+    if (e.target === resizeHandle || e.target === delBtn) return;
     e.preventDefault();
-    dropZone.classList.remove('dragover');
-    addFiles(Array.from(e.dataTransfer.files));
+    const wrap = node.closest('.preview-img-wrap');
+    interaction = {
+      type: 'drag', node,
+      photoIdx, stkIdx,
+      startMx: e.clientX, startMy: e.clientY,
+      origX: s.x, origY: s.y,
+      W: wrap.offsetWidth, H: wrap.offsetHeight,
+    };
+    node.classList.add('active');
   });
-  fileInput.addEventListener('change', () => {
-    addFiles(Array.from(fileInput.files));
-    fileInput.value = '';
+
+  // 리사이즈 시작
+  resizeHandle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const wrap = node.closest('.preview-img-wrap');
+    interaction = {
+      type: 'resize', node,
+      photoIdx, stkIdx,
+      startMx: e.clientX,
+      origSize: s.size,
+      W: wrap.offsetWidth, H: wrap.offsetHeight,
+    };
+    node.classList.add('active');
   });
 
-  function addFiles(files) {
-    const imageFiles = files.filter(f => f.type.startsWith('image/'));
-    selectedFiles = [...selectedFiles, ...imageFiles];
-    for (let i = 0; i < imageFiles.length; i++) stickersPerPhoto.push([]);
-    renderPreviews();
-  }
+  // 터치: 드래그
+  node.addEventListener('touchstart', e => {
+    if (e.target === resizeHandle || e.target === delBtn) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    const wrap = node.closest('.preview-img-wrap');
+    interaction = {
+      type: 'drag', node, photoIdx, stkIdx,
+      startMx: t.clientX, startMy: t.clientY,
+      origX: s.x, origY: s.y,
+      W: wrap.offsetWidth, H: wrap.offsetHeight,
+    };
+    node.classList.add('active');
+  }, {passive: false});
 
-  function removeFile(index) {
-    selectedFiles.splice(index, 1);
-    stickersPerPhoto.splice(index, 1);
-    renderPreviews();
-    if (hasGenerated) scheduleRegen();
-  }
+  // 터치: 리사이즈
+  resizeHandle.addEventListener('touchstart', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const t = e.touches[0];
+    const wrap = node.closest('.preview-img-wrap');
+    interaction = {
+      type: 'resize', node, photoIdx, stkIdx,
+      startMx: t.clientX,
+      origSize: s.size,
+      W: wrap.offsetWidth, H: wrap.offsetHeight,
+    };
+    node.classList.add('active');
+  }, {passive: false});
 
-  // ── 스티커 렌더링 ──
-  function renderStickerTags(container, photoIdx) {
-    const tagsEl = container.querySelector('.sticker-tags');
-    tagsEl.innerHTML = '';
-    (stickersPerPhoto[photoIdx] || []).forEach((s, si) => {
-      const tag = document.createElement('span');
-      tag.className = 'sticker-tag';
-      tag.innerHTML = `${s.emoji}<button class="del-sticker" title="제거">✕</button>`;
-      tag.querySelector('.del-sticker').addEventListener('click', () => {
-        stickersPerPhoto[photoIdx].splice(si, 1);
-        renderStickerTags(container, photoIdx);
-        if (hasGenerated) scheduleRegen();
-      });
-      tagsEl.appendChild(tag);
-    });
-  }
+  return node;
+}
 
-  function renderPreviews() {
-    previewGrid.innerHTML = '';
-    selectedFiles.forEach((file, i) => {
-      const url = URL.createObjectURL(file);
-      const item = document.createElement('div');
-      item.className = 'preview-item';
-      const defaultTrans = transSelect.value;
-      item.innerHTML = `
-        <div class="preview-img-wrap">
-          <img src="${url}" alt="photo ${i+1}" />
-          <span class="order-badge">${i + 1}</span>
-          <button class="remove-btn" title="삭제">×</button>
+/* ─────────────────────────────────────────
+   스티커 레이어 전체 다시 그리기
+───────────────────────────────────────── */
+function refreshStickerLayer(item, photoIdx) {
+  const wrap  = item.querySelector('.preview-img-wrap');
+  let layer   = wrap.querySelector('.sticker-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = 'sticker-layer';
+    wrap.appendChild(layer);
+  }
+  layer.innerHTML = '';
+  const W = wrap.offsetWidth;
+  const H = wrap.offsetHeight;
+  (stickersPerPhoto[photoIdx] || []).forEach((s, si) => {
+    layer.appendChild(createStickerNode(s, W, H, photoIdx, si));
+  });
+}
+
+/* ─────────────────────────────────────────
+   전역 mousemove / mouseup (드래그·리사이즈)
+───────────────────────────────────────── */
+function handleMove(clientX, clientY) {
+  if (!interaction) return;
+  const {type, node, photoIdx, stkIdx, W, H} = interaction;
+  const s = stickersPerPhoto[photoIdx][stkIdx];
+
+  if (type === 'drag') {
+    const dx = clientX - interaction.startMx;
+    const dy = clientY - interaction.startMy;
+    // x: 0 ~ 1-size,  y: 0 ~ 1 - size*(W/H)
+    const maxX = 1 - s.size;
+    const maxY = 1 - s.size * (W / H);
+    s.x = Math.max(0, Math.min(maxX, interaction.origX + dx / W));
+    s.y = Math.max(0, Math.min(maxY, interaction.origY + dy / H));
+  } else {
+    // resize: 오른쪽으로 드래그 → 커짐
+    const dx = clientX - interaction.startMx;
+    s.size = Math.max(0.06, Math.min(0.55, interaction.origSize + dx / W));
+    // 경계 밖으로 나가지 않도록 위치 보정
+    s.x = Math.min(s.x, 1 - s.size);
+    s.y = Math.min(s.y, 1 - s.size * (W / H));
+  }
+  applyToNode(node, s, W, H);
+}
+
+function handleEnd() {
+  if (!interaction) return;
+  interaction.node.classList.remove('active');
+  interaction = null;
+  if (hasGenerated) scheduleRegen();
+}
+
+document.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+document.addEventListener('mouseup',   handleEnd);
+document.addEventListener('touchmove', e => {
+  if (!interaction) return;
+  e.preventDefault();
+  handleMove(e.touches[0].clientX, e.touches[0].clientY);
+}, {passive: false});
+document.addEventListener('touchend',  handleEnd);
+
+/* ─────────────────────────────────────────
+   파일 관리
+───────────────────────────────────────── */
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
+
+function addFiles(files) {
+  const imgs = files.filter(f => f.type.startsWith('image/'));
+  selectedFiles = [...selectedFiles, ...imgs];
+  imgs.forEach(() => stickersPerPhoto.push([]));
+  renderPreviews();
+}
+function removeFile(idx) {
+  selectedFiles.splice(idx, 1);
+  stickersPerPhoto.splice(idx, 1);
+  renderPreviews();
+  if (hasGenerated) scheduleRegen();
+}
+
+/* ─────────────────────────────────────────
+   미리보기 렌더링
+───────────────────────────────────────── */
+function renderPreviews() {
+  previewGrid.innerHTML = '';
+  selectedFiles.forEach((file, i) => {
+    const url  = URL.createObjectURL(file);
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+    const defaultTrans = transSelect.value;
+
+    item.innerHTML = `
+      <div class="preview-img-wrap">
+        <img src="${url}" alt="photo ${i+1}" />
+        <span class="order-badge">${i+1}</span>
+        <button class="remove-photo-btn" title="삭제">×</button>
+        <div class="sticker-layer"></div>
+      </div>
+      <textarea class="caption-input" placeholder="자막 입력 (선택)" rows="2"></textarea>
+      <span class="trans-label">↓ 다음으로 전환</span>
+      <select class="trans-select">
+        ${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===defaultTrans?' selected':''}>${t.label}</option>`).join('')}
+      </select>
+      <div class="sticker-area">
+        <button class="sticker-toggle-btn">🎨 스티커 추가</button>
+        <div class="sticker-palette">
+          ${STICKER_EMOJIS.map(e=>`<button>${e}</button>`).join('')}
         </div>
-        <textarea class="caption-input" placeholder="자막 입력 (선택)" rows="2"></textarea>
-        <span class="trans-label">↓ 다음으로 전환</span>
-        <select class="trans-select">${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===defaultTrans?' selected':''}>${t.label}</option>`).join('')}</select>
-        <div class="sticker-area">
-          <button class="sticker-toggle-btn">🎨 스티커 추가</button>
-          <div class="sticker-palette">${STICKER_EMOJIS.map(e=>`<button>${e}</button>`).join('')}</div>
-          <div class="sticker-tags"></div>
-        </div>
-      `;
-      item.querySelector('.remove-btn').addEventListener('click', () => removeFile(i));
+      </div>
+    `;
 
-      item.querySelector('.caption-input').addEventListener('input', () => {
+    item.querySelector('.remove-photo-btn').addEventListener('click', () => removeFile(i));
+    item.querySelector('.caption-input').addEventListener('input', () => { if (hasGenerated) scheduleRegen(); });
+    item.querySelector('.trans-select').addEventListener('change', () => { if (hasGenerated) scheduleRegen(); });
+
+    // 스티커 팔레트 토글 / 선택
+    const toggleBtn = item.querySelector('.sticker-toggle-btn');
+    const palette   = item.querySelector('.sticker-palette');
+    toggleBtn.addEventListener('click', () => palette.classList.toggle('open'));
+    palette.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const existing = stickersPerPhoto[i];
+        const pos = DEFAULT_POS[existing.length % DEFAULT_POS.length];
+        existing.push({emoji: btn.textContent, x: pos.x, y: pos.y, size: 0.15});
+        // 이미지 로드 후 레이어 갱신
+        const img = item.querySelector('img');
+        if (img.complete) {
+          refreshStickerLayer(item, i);
+        } else {
+          img.onload = () => refreshStickerLayer(item, i);
+        }
         if (hasGenerated) scheduleRegen();
       });
-      item.querySelector('.trans-select').addEventListener('change', () => {
-        if (hasGenerated) scheduleRegen();
-      });
-
-      const toggleBtn = item.querySelector('.sticker-toggle-btn');
-      const palette   = item.querySelector('.sticker-palette');
-      toggleBtn.addEventListener('click', () => palette.classList.toggle('open'));
-      palette.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const existing = stickersPerPhoto[i] || [];
-          const pos = DEFAULT_POSITIONS[existing.length % DEFAULT_POSITIONS.length];
-          stickersPerPhoto[i] = [...existing, {emoji: btn.textContent, x: pos.x, y: pos.y, size: 0.12}];
-          renderStickerTags(item, i);
-          if (hasGenerated) scheduleRegen();
-        });
-      });
-
-      renderStickerTags(item, i);
-      previewGrid.appendChild(item);
     });
 
-    const hasFiles = selectedFiles.length > 0;
-    previewSection.style.display = hasFiles ? 'block' : 'none';
-    createBtn.disabled = !hasFiles;
-    if (!hasGenerated) {
-      statusEl.textContent = hasFiles ? `${selectedFiles.length}장 선택됨` : '';
-      statusEl.className = '';
-    }
-  }
+    // 이미지 로드 완료 후 스티커 레이어 초기화
+    const img = item.querySelector('img');
+    img.addEventListener('load', () => refreshStickerLayer(item, i));
+    if (img.complete) refreshStickerLayer(item, i);
 
-  // ── 슬라이더 ──
-  durationRange.addEventListener('input', () => {
-    durationLabel.textContent = durationRange.value + '초';
-    if (hasGenerated) scheduleRegen();
+    previewGrid.appendChild(item);
   });
 
-  // ── 기본 전환 효과 변경 ──
-  transSelect.addEventListener('change', () => {
-    previewGrid.querySelectorAll('.trans-select').forEach(sel => {
-      sel.value = transSelect.value;
-    });
-    if (hasGenerated) scheduleRegen();
-  });
+  const hasFiles = selectedFiles.length > 0;
+  previewSection.style.display = hasFiles ? 'block' : 'none';
+  createBtn.disabled = !hasFiles;
+  if (!hasGenerated) {
+    statusEl.textContent = hasFiles ? `${selectedFiles.length}장 선택됨` : '';
+    statusEl.className = '';
+  }
+}
 
-  // ── 자동 재생성 (디바운스 2초) ──
-  function scheduleRegen() {
-    changeBanner.style.display = 'block';
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => generateVideo(true), 2000);
+/* ─────────────────────────────────────────
+   설정 변경 → 재생성
+───────────────────────────────────────── */
+durationRange.addEventListener('input', () => {
+  durationLabel.textContent = durationRange.value + '초';
+  if (hasGenerated) scheduleRegen();
+});
+transSelect.addEventListener('change', () => {
+  previewGrid.querySelectorAll('.trans-select').forEach(s => s.value = transSelect.value);
+  if (hasGenerated) scheduleRegen();
+});
+
+function scheduleRegen() {
+  changeBanner.style.display = 'block';
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => generateVideo(true), 2000);
+}
+
+/* ─────────────────────────────────────────
+   FormData 수집
+───────────────────────────────────────── */
+function collectFormData() {
+  const captions    = Array.from(previewGrid.querySelectorAll('.caption-input')).map(el => el.value.trim());
+  const transitions = Array.from(previewGrid.querySelectorAll('.trans-select')).map(el => el.value);
+  const fd = new FormData();
+  selectedFiles.forEach(f => fd.append('photos', f));
+  fd.append('duration',    durationRange.value);
+  fd.append('captions',    JSON.stringify(captions));
+  fd.append('transitions', JSON.stringify(transitions));
+  fd.append('stickers',    JSON.stringify(stickersPerPhoto));
+  return fd;
+}
+
+/* ─────────────────────────────────────────
+   영상 생성
+───────────────────────────────────────── */
+async function generateVideo(isRegen = false) {
+  if (selectedFiles.length === 0 || isGenerating) return;
+  isGenerating = true;
+  createBtn.disabled = true;
+  changeBanner.style.display = 'none';
+
+  if (!isRegen) {
+    rightPanel.style.display = 'block';
+    mainCard.classList.add('edit-mode');
+    statusEl.textContent = '영상을 만드는 중입니다…';
+    statusEl.className = '';
+    progressWrap.style.display = 'block';
+    downloadArea.style.display = 'none';
+    videoWrap.style.display = 'none';
+  } else {
+    videoOverlay.classList.add('show');
+    progressWrap.style.display = 'block';
   }
 
-  function collectFormData() {
-    const captions = Array.from(previewGrid.querySelectorAll('.caption-input'))
-      .map(el => el.value.trim());
-    const transitions = Array.from(previewGrid.querySelectorAll('.trans-select'))
-      .map(el => el.value);
-    const fd = new FormData();
-    selectedFiles.forEach(f => fd.append('photos', f));
-    fd.append('duration', durationRange.value);
-    fd.append('captions', JSON.stringify(captions));
-    fd.append('transitions', JSON.stringify(transitions));
-    fd.append('stickers', JSON.stringify(stickersPerPhoto));
-    return fd;
-  }
-
-  // ── 영상 생성 ──
-  async function generateVideo(isRegen = false) {
-    if (selectedFiles.length === 0 || isGenerating) return;
-    isGenerating = true;
-    createBtn.disabled = true;
-    changeBanner.style.display = 'none';
-
-    if (!isRegen) {
-      // 최초 생성: 우측 패널 열기
-      rightPanel.style.display = 'block';
-      mainCard.classList.add('edit-mode');
-      statusEl.textContent = '영상을 만드는 중입니다…';
-      statusEl.className = '';
-      progressWrap.style.display = 'block';
-      downloadArea.style.display = 'none';
-      videoWrap.style.display = 'none';
-    } else {
-      // 재생성: 비디오 위에 스피너 오버레이
-      videoOverlay.classList.add('show');
-      progressWrap.style.display = 'block';
-    }
-
-    try {
-      const res  = await fetch('/create', { method: 'POST', body: collectFormData() });
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        statusEl.textContent = '오류: ' + (data.error || '알 수 없는 오류');
-        statusEl.className = 'error-msg';
-      } else {
-        hasGenerated = true;
-        statusEl.textContent = isRegen ? '✅ 재생성 완료!' : '✅ 완료! 설정을 바꾸면 자동으로 다시 만들어드려요.';
-        statusEl.className = '';
-        const vid = data.video_id;
-        previewVideo.src = '/preview/' + vid + '?t=' + Date.now();
-        previewVideo.load();
-        previewVideo.play().catch(() => {});
-        downloadLink.href = '/download/' + vid;
-        videoWrap.style.display = 'block';
-        downloadArea.style.display = 'block';
-        createBtn.textContent = '다시 만들기';
-      }
-    } catch (err) {
-      statusEl.textContent = '네트워크 오류가 발생했습니다.';
+  try {
+    const res  = await fetch('/create', { method: 'POST', body: collectFormData() });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      statusEl.textContent = '오류: ' + (data.error || '알 수 없는 오류');
       statusEl.className = 'error-msg';
-    } finally {
-      progressWrap.style.display = 'none';
-      videoOverlay.classList.remove('show');
-      createBtn.disabled = selectedFiles.length === 0;
-      isGenerating = false;
+    } else {
+      hasGenerated = true;
+      statusEl.textContent = isRegen ? '✅ 재생성 완료!' : '✅ 완료! 설정을 바꾸면 자동으로 다시 만들어드려요.';
+      statusEl.className = '';
+      const vid = data.video_id;
+      previewVideo.src = '/preview/' + vid + '?t=' + Date.now();
+      previewVideo.load();
+      previewVideo.play().catch(() => {});
+      downloadLink.href = '/download/' + vid;
+      videoWrap.style.display = 'block';
+      downloadArea.style.display = 'block';
+      createBtn.textContent = '다시 만들기';
     }
+  } catch {
+    statusEl.textContent = '네트워크 오류가 발생했습니다.';
+    statusEl.className = 'error-msg';
+  } finally {
+    progressWrap.style.display = 'none';
+    videoOverlay.classList.remove('show');
+    createBtn.disabled = selectedFiles.length === 0;
+    isGenerating = false;
   }
+}
 
-  // ── 영상 만들기 버튼 ──
-  createBtn.addEventListener('click', () => {
-    clearTimeout(debounceTimer);
-    generateVideo(hasGenerated);
-  });
+createBtn.addEventListener('click', () => {
+  clearTimeout(debounceTimer);
+  generateVideo(hasGenerated);
+});
 </script>
 </body>
 </html>
