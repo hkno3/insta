@@ -64,7 +64,13 @@
       position: relative; aspect-ratio: 9/16; background: #000;
       border-radius: 12px 12px 0 0; overflow: hidden;
     }
-    .preview-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .preview-img-wrap img,
+    .preview-img-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .video-badge {
+      position: absolute; bottom: 5px; left: 5px;
+      background: rgba(0,0,0,.65); color: #fff; font-size: .65rem;
+      font-weight: 700; padding: 2px 6px; border-radius: 6px; pointer-events: none;
+    }
     .order-badge {
       position: absolute; top: 5px; left: 5px;
       background: rgba(0,0,0,.6); color: #fff; font-size: .7rem;
@@ -258,9 +264,9 @@
 
     <div class="drop-zone" id="drop-zone">
       <div class="icon">🖼️</div>
-      <p><span>클릭</span>하거나 사진을 여기에 드래그하세요</p>
-      <p style="font-size:.8rem;color:#aaa;margin-top:6px;">JPG, PNG, WEBP 등 · 여러 장 동시 선택 가능</p>
-      <input type="file" id="file-input" accept="image/*" multiple />
+      <p><span>클릭</span>하거나 파일을 여기에 드래그하세요</p>
+      <p style="font-size:.8rem;color:#aaa;margin-top:6px;">이미지(JPG·PNG·WEBP) 및 동영상(MP4·MOV·WEBM) · 여러 개 동시 선택 가능</p>
+      <input type="file" id="file-input" accept="image/*,video/*" multiple />
     </div>
 
     <div id="preview-section" style="display:none; margin-bottom:24px;">
@@ -543,9 +549,11 @@ function addStickerToPhoto(emoji, photoIdx, item) {
   const existing = stickersPerPhoto[photoIdx];
   const pos = DEFAULT_POS[existing.length % DEFAULT_POS.length];
   existing.push({ emoji, x: pos.x, y: pos.y, size: 0.15 });
-  const img = item.querySelector('img');
-  if (img.complete) refreshStickerLayer(item, photoIdx);
-  else img.onload = () => refreshStickerLayer(item, photoIdx);
+  const media = item.querySelector('img') || item.querySelector('video');
+  const ready = media.tagName === 'VIDEO' ? media.readyState >= 1 : media.complete;
+  if (ready) refreshStickerLayer(item, photoIdx);
+  else media.addEventListener(media.tagName === 'VIDEO' ? 'loadedmetadata' : 'load',
+    () => refreshStickerLayer(item, photoIdx), { once: true });
   if (hasGenerated) scheduleRegen();
 }
 
@@ -572,10 +580,12 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover
 dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); addFiles(Array.from(e.dataTransfer.files)); });
 fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
 
+const ACCEPTED = f => f.type.startsWith('image/') || f.type.startsWith('video/');
+
 function addFiles(files) {
-  const imgs = files.filter(f => f.type.startsWith('image/'));
-  selectedFiles = [...selectedFiles, ...imgs];
-  imgs.forEach(() => stickersPerPhoto.push([]));
+  const valid = files.filter(ACCEPTED);
+  selectedFiles = [...selectedFiles, ...valid];
+  valid.forEach(() => stickersPerPhoto.push([]));
   renderPreviews();
 }
 function removeFile(idx) {
@@ -589,14 +599,20 @@ function removeFile(idx) {
 function renderPreviews() {
   previewGrid.innerHTML = '';
   selectedFiles.forEach((file, i) => {
-    const url  = URL.createObjectURL(file);
-    const item = document.createElement('div');
+    const url     = URL.createObjectURL(file);
+    const isVid   = file.type.startsWith('video/');
+    const item    = document.createElement('div');
     item.className = 'preview-item';
     const dt = transSelect.value;
 
+    const mediaTpl = isVid
+      ? `<video src="${url}" muted playsinline preload="metadata"></video>
+         <span class="video-badge">🎬 동영상</span>`
+      : `<img src="${url}" alt="photo ${i+1}" />`;
+
     item.innerHTML = `
       <div class="preview-img-wrap">
-        <img src="${url}" alt="photo ${i+1}" />
+        ${mediaTpl}
         <span class="order-badge">${i+1}</span>
         <button class="remove-photo-btn" title="삭제">×</button>
         <div class="sticker-layer"></div>
@@ -652,10 +668,16 @@ function renderPreviews() {
     customBtn.addEventListener('click', doCustomAdd);
     customInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doCustomAdd(); } });
 
-    // 이미지 로드 후 스티커 레이어
-    const img = item.querySelector('img');
-    img.addEventListener('load', () => refreshStickerLayer(item, i));
-    if (img.complete) refreshStickerLayer(item, i);
+    // 미디어 로드 후 스티커 레이어
+    if (isVid) {
+      const vid = item.querySelector('video');
+      vid.addEventListener('loadedmetadata', () => refreshStickerLayer(item, i));
+      if (vid.readyState >= 1) refreshStickerLayer(item, i);
+    } else {
+      const img = item.querySelector('img');
+      img.addEventListener('load', () => refreshStickerLayer(item, i));
+      if (img.complete) refreshStickerLayer(item, i);
+    }
 
     previewGrid.appendChild(item);
   });
@@ -664,7 +686,11 @@ function renderPreviews() {
   previewSection.style.display = hasFiles ? 'block' : 'none';
   createBtn.disabled = !hasFiles;
   if (!hasGenerated) {
-    statusEl.textContent = hasFiles ? `${selectedFiles.length}장 선택됨` : '';
+    const imgCnt = selectedFiles.filter(f => f.type.startsWith('image/')).length;
+    const vidCnt = selectedFiles.length - imgCnt;
+    statusEl.textContent = hasFiles
+      ? [imgCnt && `사진 ${imgCnt}장`, vidCnt && `동영상 ${vidCnt}개`].filter(Boolean).join(' · ') + ' 선택됨'
+      : '';
     statusEl.className = '';
   }
 }

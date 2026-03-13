@@ -11,7 +11,7 @@ from flask import Flask, render_template, request, send_file, jsonify
 from PIL import Image
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB limit
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB limit
 
 UPLOAD_FOLDER = Path('uploads')
 OUTPUT_FOLDER = Path('outputs')
@@ -20,7 +20,9 @@ UPLOAD_FOLDER.mkdir(exist_ok=True)
 OUTPUT_FOLDER.mkdir(exist_ok=True)
 EMOJI_CACHE.mkdir(exist_ok=True)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'}
+IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'}
+VIDEO_EXTENSIONS = {'mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'}
+ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 TRANS_DUR = 0.5  # 전환 효과 시간(초)
@@ -28,6 +30,23 @@ TRANS_DUR = 0.5  # 전환 효과 시간(초)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def is_video(path: Path) -> bool:
+    return path.suffix.lstrip('.').lower() in VIDEO_EXTENSIONS
+
+
+def get_media_duration(path: Path) -> float:
+    """ffprobe로 미디어 길이(초) 반환. 실패 시 3.0."""
+    result = subprocess.run(
+        ['ffprobe', '-v', 'quiet', '-print_format', 'json',
+         '-show_entries', 'format=duration', str(path)],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(json.loads(result.stdout)['format']['duration'])
+    except Exception:
+        return 3.0
 
 
 def get_font_path():
@@ -150,42 +169,17 @@ def get_twemoji_png(emoji: str) -> Path | None:
 
 # ── 클립 생성 ──────────────────────────────────────────────
 
-def make_clip(img_path: Path, clip_path: Path, duration: float,
-              caption: str = '', stickers: list | None = None) -> tuple[bool, str]:
-    """단일 이미지 → 클립 (자막 + 이모지 스티커 포함)."""
-    cap = build_caption_filter(caption)
-
-    # 유효한 스티커만 필터링 (PNG 다운로드 성공한 것만)
+def _build_valid_stickers(stickers):
     valid = []
     for s in (stickers or []):
         png = get_twemoji_png(s['emoji'])
         if png:
             valid.append({**s, 'png': str(png)})
+    return valid
 
-    if not valid:
-        # 스티커 없음 → 단순 -vf
-        filters = [f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}']
-        if cap:
-            filters.append(cap)
-        cmd = [
-            'ffmpeg', '-y',
-            '-loop', '1', '-i', str(img_path),
-            '-t', str(duration),
-            '-vf', ','.join(filters),
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
-            str(clip_path),
-        ]
-        return run_ffmpeg(cmd)
 
-    # 스티커 있음 → filter_complex
-    cmd = ['ffmpeg', '-y', '-loop', '1', '-i', str(img_path)]
-    for s in valid:
-        cmd += ['-i', s['png']]
-
-    base_filter = f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}'
-    if cap:
-        base_filter += f',{cap}'
-
+def _sticker_filter_complex(valid: list, base_filter: str) -> tuple[list, str]:
+    """filter_complex 문자열 구성. (fc_parts, last_label) 반환."""
     fc = [f'[0:v]{base_filter}[base]']
     prev = 'base'
     for idx, s in enumerate(valid):
@@ -196,15 +190,82 @@ def make_clip(img_path: Path, clip_path: Path, duration: float,
         out = f'v{idx}'
         fc.append(f'[{prev}][s{idx}]overlay={x_px}:{y_px}[{out}]')
         prev = out
+    return fc, prev
 
+
+def make_image_clip(img_path: Path, clip_path: Path, duration: float,
+                    caption: str = '', stickers: list | None = None) -> tuple[bool, str]:
+    """이미지 → 클립."""
+    cap   = build_caption_filter(caption)
+    valid = _build_valid_stickers(stickers)
+
+    if not valid:
+        filters = [f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}']
+        if cap:
+            filters.append(cap)
+        cmd = [
+            'ffmpeg', '-y', '-loop', '1', '-i', str(img_path),
+            '-t', str(duration),
+            '-vf', ','.join(filters),
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
+            str(clip_path),
+        ]
+        return run_ffmpeg(cmd)
+
+    cmd = ['ffmpeg', '-y', '-loop', '1', '-i', str(img_path)]
+    for s in valid:
+        cmd += ['-i', s['png']]
+    base = f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}' + (f',{cap}' if cap else '')
+    fc, last = _sticker_filter_complex(valid, base)
     cmd += [
         '-t', str(duration),
         '-filter_complex', ';'.join(fc),
-        '-map', f'[{prev}]',
+        '-map', f'[{last}]',
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
         str(clip_path),
     ]
     return run_ffmpeg(cmd)
+
+
+def make_video_clip(video_path: Path, clip_path: Path,
+                    caption: str = '', stickers: list | None = None) -> tuple[bool, str]:
+    """동영상 → 클립 (9:16 크롭·리스케일, 자막·스티커 포함)."""
+    cap   = build_caption_filter(caption)
+    valid = _build_valid_stickers(stickers)
+    # 가로/세로 비율 유지하며 1080x1920 꽉 채우기 (crop)
+    scale_crop = (f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}'
+                  f':force_original_aspect_ratio=increase,'
+                  f'crop={VIDEO_WIDTH}:{VIDEO_HEIGHT}')
+
+    if not valid:
+        vf = scale_crop + (f',{cap}' if cap else '')
+        cmd = [
+            'ffmpeg', '-y', '-i', str(video_path),
+            '-vf', vf, '-an',
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
+            str(clip_path),
+        ]
+        return run_ffmpeg(cmd)
+
+    cmd = ['ffmpeg', '-y', '-i', str(video_path)]
+    for s in valid:
+        cmd += ['-i', s['png']]
+    base = scale_crop + (f',{cap}' if cap else '')
+    fc, last = _sticker_filter_complex(valid, base)
+    cmd += [
+        '-filter_complex', ';'.join(fc),
+        '-map', f'[{last}]', '-an',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
+        str(clip_path),
+    ]
+    return run_ffmpeg(cmd)
+
+
+def make_clip(media_path: Path, clip_path: Path, duration: float,
+              caption: str = '', stickers: list | None = None) -> tuple[bool, str]:
+    if is_video(media_path):
+        return make_video_clip(media_path, clip_path, caption, stickers)
+    return make_image_clip(media_path, clip_path, duration, caption, stickers)
 
 
 XFADE_TRANSITIONS = {
@@ -250,11 +311,11 @@ def merge_two_clips(clip_a: Path, clip_b: Path, output: Path,
     return ok, err, dur_a - TRANS_DUR
 
 
-def make_video(image_paths: list[Path], output_path: Path,
-               duration: float, transitions: list[str],
+def make_video(media_paths: list[Path], output_path: Path,
+               img_duration: float, transitions: list[str],
                captions: list[str] | None = None,
                stickers_per_photo: list[list] | None = None) -> tuple[bool, str]:
-    n = len(image_paths)
+    n = len(media_paths)
     if captions is None:
         captions = [''] * n
     while len(captions) < n:
@@ -270,13 +331,16 @@ def make_video(image_paths: list[Path], output_path: Path,
     tmp_dir.mkdir(exist_ok=True)
 
     clips = []
-    for i, (img, cap) in enumerate(zip(image_paths, captions)):
+    clip_durations = []
+    for i, (media, cap) in enumerate(zip(media_paths, captions)):
         clip = tmp_dir / f'clip_{i:03d}.mp4'
-        ok, err = make_clip(img, clip, duration, cap, stickers_per_photo[i])
+        dur  = get_media_duration(media) if is_video(media) else img_duration
+        ok, err = make_clip(media, clip, dur, cap, stickers_per_photo[i])
         if not ok:
             _cleanup(tmp_dir)
             return False, err
         clips.append(clip)
+        clip_durations.append(dur)
 
     if n == 1:
         shutil.copy2(clips[0], output_path)
@@ -284,7 +348,7 @@ def make_video(image_paths: list[Path], output_path: Path,
         return True, ''
 
     current = clips[0]
-    current_dur = duration
+    current_dur = clip_durations[0]
 
     for i in range(1, n):
         trans = transitions[i - 1]
@@ -294,7 +358,7 @@ def make_video(image_paths: list[Path], output_path: Path,
             _cleanup(tmp_dir)
             return False, err
         current = merged
-        current_dur += duration
+        current_dur += clip_durations[i]
 
     shutil.copy2(current, output_path)
     _cleanup(tmp_dir)
@@ -334,7 +398,7 @@ def create_video():
         stickers_per_photo = []
 
     if not files or all(f.filename == '' for f in files):
-        return jsonify({'error': '사진을 하나 이상 업로드해 주세요.'}), 400
+        return jsonify({'error': '파일을 하나 이상 업로드해 주세요.'}), 400
 
     if duration < 1 or duration > 10:
         return jsonify({'error': '사진당 재생 시간은 1~10초 사이여야 합니다.'}), 400
@@ -345,10 +409,15 @@ def create_video():
 
     prepared = []
     for i, f in enumerate(files):
-        if f and allowed_file(f.filename):
-            ext = f.filename.rsplit('.', 1)[1].lower()
-            raw_path = job_dir / f'raw_{i:03d}.{ext}'
-            f.save(raw_path)
+        if not (f and allowed_file(f.filename)):
+            continue
+        ext = f.filename.rsplit('.', 1)[1].lower()
+        raw_path = job_dir / f'raw_{i:03d}.{ext}'
+        f.save(raw_path)
+        if ext in VIDEO_EXTENSIONS:
+            # 동영상은 그대로 사용
+            prepared.append(raw_path)
+        else:
             prepared_path = job_dir / f'img_{i:03d}.jpg'
             try:
                 prepare_image(raw_path, prepared_path)
@@ -357,7 +426,7 @@ def create_video():
                 return jsonify({'error': f'이미지 처리 오류: {e}'}), 500
 
     if not prepared:
-        return jsonify({'error': '유효한 이미지 파일이 없습니다.'}), 400
+        return jsonify({'error': '유효한 파일이 없습니다.'}), 400
 
     output_path = OUTPUT_FOLDER / f'{job_id}.mp4'
     success, err_msg = make_video(
