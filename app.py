@@ -20,6 +20,7 @@ OUTPUT_FOLDER.mkdir(exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'}
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
+TRANS_DUR = 0.5  # 전환 효과 시간(초)
 
 
 def allowed_file(filename):
@@ -54,7 +55,6 @@ def get_font_path():
 
 
 def escape_drawtext(text: str) -> str:
-    """ffmpeg drawtext 필터용 텍스트 이스케이프."""
     text = text.replace('\\', '\\\\')
     text = text.replace(':', '\\:')
     text = text.replace("'", "\\'")
@@ -63,13 +63,11 @@ def escape_drawtext(text: str) -> str:
 
 
 def build_caption_filter(text: str, font_size: int = 55) -> str:
-    """자막 drawtext 필터 문자열 생성."""
     if not text or not text.strip():
         return ''
     font_path = get_font_path()
     escaped = escape_drawtext(text.strip())
     fp = font_path.replace('\\', '/') if font_path else ''
-    # Windows 드라이브 문자 콜론 이스케이프 (C: → C\:)
     if len(fp) >= 2 and fp[1] == ':':
         fp = fp[0] + '\\:' + fp[2:]
     font_part = f"fontfile='{fp}':" if fp else ''
@@ -86,7 +84,6 @@ def build_caption_filter(text: str, font_size: int = 55) -> str:
 
 
 def prepare_image(src_path: Path, dst_path: Path):
-    """이미지를 1080x1920에 맞게 크롭 후 저장."""
     img = Image.open(src_path).convert('RGB')
     src_w, src_h = img.size
     target_ratio = VIDEO_WIDTH / VIDEO_HEIGHT
@@ -106,7 +103,6 @@ def prepare_image(src_path: Path, dst_path: Path):
 
 
 def run_ffmpeg(cmd: list) -> tuple[bool, str]:
-    """ffmpeg 실행 후 (성공여부, 에러메시지) 반환."""
     result = subprocess.run(cmd, capture_output=True)
     stderr = result.stderr.decode('utf-8', errors='ignore') if result.stderr else ''
     if result.returncode != 0:
@@ -114,22 +110,17 @@ def run_ffmpeg(cmd: list) -> tuple[bool, str]:
     return result.returncode == 0, stderr
 
 
-def make_clip(img_path: Path, clip_path: Path, duration: float,
-              caption: str = '', extra_vf: str = '') -> tuple[bool, str]:
-    """단일 이미지로 클립 생성 (자막 포함 가능)."""
+def make_clip(img_path: Path, clip_path: Path, duration: float, caption: str = '') -> tuple[bool, str]:
+    """단일 이미지 → 클립 (자막 포함)."""
     filters = [f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}']
-    if extra_vf:
-        filters.append(extra_vf)
     cap = build_caption_filter(caption)
     if cap:
         filters.append(cap)
-    vf = ','.join(filters)
-
     cmd = [
         'ffmpeg', '-y',
         '-loop', '1', '-i', str(img_path),
         '-t', str(duration),
-        '-vf', vf,
+        '-vf', ','.join(filters),
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
         '-r', '30',
         str(clip_path),
@@ -137,141 +128,93 @@ def make_clip(img_path: Path, clip_path: Path, duration: float,
     return run_ffmpeg(cmd)
 
 
-def concat_clips(clip_paths: list[Path], output_path: Path) -> tuple[bool, str]:
-    """클립들을 순서대로 이어붙이기."""
-    concat_list = output_path.parent / f'concat_{output_path.stem}.txt'
-    with open(concat_list, 'w', encoding='utf-8') as f:
-        for c in clip_paths:
-            # Windows 경로 백슬래시를 슬래시로 변환
-            p = str(c.resolve()).replace('\\', '/')
-            f.write(f"file '{p}'\n")
+def merge_two_clips(clip_a: Path, clip_b: Path, output: Path,
+                    transition: str, dur_a: float) -> tuple[bool, str, float]:
+    """두 클립을 전환 효과로 합치기. (ok, err, 새 길이) 반환."""
+    if transition == 'none':
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', str(clip_a), '-i', str(clip_b),
+            '-filter_complex', '[0:v][1:v]concat=n=2:v=1[v]',
+            '-map', '[v]',
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+            str(output),
+        ]
+        ok, err = run_ffmpeg(cmd)
+        return ok, err, dur_a  # duration은 concat 후 ffprobe로 정확히 알 수 있지만 근사치 사용
 
+    xfade_name = 'fade' if transition == 'fade' else 'slideleft'
+    offset = max(dur_a - TRANS_DUR, 0)
     cmd = [
         'ffmpeg', '-y',
-        '-f', 'concat', '-safe', '0',
-        '-i', str(concat_list),
+        '-i', str(clip_a), '-i', str(clip_b),
+        '-filter_complex',
+        f'[0:v][1:v]xfade=transition={xfade_name}:duration={TRANS_DUR}:offset={offset}[v]',
+        '-map', '[v]',
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-        str(output_path),
+        '-r', '30',
+        str(output),
     ]
     ok, err = run_ffmpeg(cmd)
-    concat_list.unlink(missing_ok=True)
-    return ok, err
+    return ok, err, dur_a - TRANS_DUR
 
 
 def make_video(image_paths: list[Path], output_path: Path,
-               duration: float, transition: str,
+               duration: float, transitions: list[str],
                captions: list[str] | None = None) -> tuple[bool, str]:
-    """ffmpeg를 사용해 이미지 슬라이드쇼 영상 생성."""
-    if captions is None:
-        captions = [''] * len(image_paths)
-    while len(captions) < len(image_paths):
-        captions.append('')
-
-    if transition == 'fade':
-        return _make_fade_video(image_paths, output_path, duration, captions)
-    elif transition == 'slide':
-        return _make_slide_video(image_paths, output_path, duration, captions)
-    else:
-        return _make_simple_video(image_paths, output_path, duration, captions)
-
-
-def _make_simple_video(image_paths, output_path, duration, captions):
-    """전환 효과 없는 슬라이드쇼."""
-    tmp_dir = output_path.parent / f'clips_{output_path.stem}'
-    tmp_dir.mkdir(exist_ok=True)
-    clips = []
-
-    for i, (img_path, caption) in enumerate(zip(image_paths, captions)):
-        clip_path = tmp_dir / f'clip_{i:03d}.mp4'
-        ok, err = make_clip(img_path, clip_path, duration, caption)
-        if not ok:
-            return False, err
-        clips.append(clip_path)
-
-    ok, err = concat_clips(clips, output_path)
-    for c in clips:
-        c.unlink(missing_ok=True)
-    tmp_dir.rmdir()
-    return ok, err
-
-
-def _make_fade_video(image_paths, output_path, duration, captions):
-    """페이드 인/아웃 전환 효과."""
-    fade_dur = 0.5
-    tmp_dir = output_path.parent / f'clips_{output_path.stem}'
-    tmp_dir.mkdir(exist_ok=True)
-    clips = []
-
-    for i, (img_path, caption) in enumerate(zip(image_paths, captions)):
-        clip_path = tmp_dir / f'clip_{i:03d}.mp4'
-        fade_vf = (
-            f'fade=t=in:st=0:d={fade_dur},'
-            f'fade=t=out:st={duration - fade_dur}:d={fade_dur}'
-        )
-        ok, err = make_clip(img_path, clip_path, duration, caption, fade_vf)
-        if not ok:
-            return False, err
-        clips.append(clip_path)
-
-    ok, err = concat_clips(clips, output_path)
-    for c in clips:
-        c.unlink(missing_ok=True)
-    tmp_dir.rmdir()
-    return ok, err
-
-
-def _make_slide_video(image_paths, output_path, duration, captions):
-    """슬라이드 전환 효과."""
+    """
+    transitions[i] = 사진 i에서 사진 i+1로 넘어갈 때의 전환 효과
+    ('fade' | 'slide' | 'none')
+    """
     n = len(image_paths)
-    trans_dur = 0.4
-    fps = 30
+    if captions is None:
+        captions = [''] * n
+    while len(captions) < n:
+        captions.append('')
+    while len(transitions) < n:
+        transitions.append('none')
+
+    tmp_dir = output_path.parent / f'clips_{output_path.stem}'
+    tmp_dir.mkdir(exist_ok=True)
+
+    # 1단계: 개별 클립 생성
+    clips = []
+    for i, (img, cap) in enumerate(zip(image_paths, captions)):
+        clip = tmp_dir / f'clip_{i:03d}.mp4'
+        ok, err = make_clip(img, clip, duration, cap)
+        if not ok:
+            _cleanup(tmp_dir)
+            return False, err
+        clips.append(clip)
 
     if n == 1:
-        return _make_simple_video(image_paths, output_path, duration, captions)
+        shutil.copy2(clips[0], output_path)
+        _cleanup(tmp_dir)
+        return True, ''
 
-    tmp_dir = output_path.parent / f'clips_{output_path.stem}'
-    tmp_dir.mkdir(exist_ok=True)
-    clips = []
-
-    for i, (img_path, caption) in enumerate(zip(image_paths, captions)):
-        clip_path = tmp_dir / f'clip_{i:03d}.mp4'
-        ok, err = make_clip(img_path, clip_path, duration, caption)
-        if not ok:
-            return False, err
-        clips.append(clip_path)
-
+    # 2단계: 순서대로 전환 효과 적용
     current = clips[0]
-    offset = duration - trans_dur
+    current_dur = duration
 
     for i in range(1, n):
+        trans = transitions[i - 1]
         merged = tmp_dir / f'merged_{i:03d}.mp4'
-        cmd = [
-            'ffmpeg', '-y',
-            '-i', str(current),
-            '-i', str(clips[i]),
-            '-filter_complex',
-            f'[0:v][1:v]xfade=transition=slideleft:duration={trans_dur}:offset={offset}[v]',
-            '-map', '[v]',
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-            '-r', str(fps),
-            str(merged),
-        ]
-        ok, err = run_ffmpeg(cmd)
+        ok, err, current_dur = merge_two_clips(current, clips[i], merged, trans, current_dur)
         if not ok:
-            for c in clips:
-                c.unlink(missing_ok=True)
-            tmp_dir.rmdir()
-            return _make_simple_video(image_paths, output_path, duration, captions)
+            _cleanup(tmp_dir)
+            return False, err
         current = merged
-        offset += duration - trans_dur
+        current_dur += duration  # 근사 누적
 
     shutil.copy2(current, output_path)
-    for c in clips:
-        c.unlink(missing_ok=True)
+    _cleanup(tmp_dir)
+    return True, ''
+
+
+def _cleanup(tmp_dir: Path):
     for f in tmp_dir.iterdir():
         f.unlink(missing_ok=True)
     tmp_dir.rmdir()
-    return True, ''
 
 
 @app.route('/')
@@ -283,13 +226,17 @@ def index():
 def create_video():
     files = request.files.getlist('photos')
     duration = float(request.form.get('duration', 3.0))
-    transition = request.form.get('transition', 'fade')
     captions_json = request.form.get('captions', '[]')
+    transitions_json = request.form.get('transitions', '[]')
 
     try:
         captions = json.loads(captions_json)
     except Exception:
         captions = []
+    try:
+        transitions = json.loads(transitions_json)
+    except Exception:
+        transitions = []
 
     if not files or all(f.filename == '' for f in files):
         return jsonify({'error': '사진을 하나 이상 업로드해 주세요.'}), 400
@@ -318,7 +265,7 @@ def create_video():
         return jsonify({'error': '유효한 이미지 파일이 없습니다.'}), 400
 
     output_path = OUTPUT_FOLDER / f'{job_id}.mp4'
-    success, err_msg = make_video(prepared, output_path, duration, transition, captions)
+    success, err_msg = make_video(prepared, output_path, duration, transitions, captions)
 
     if not success:
         return jsonify({'error': f'영상 생성 실패: {err_msg[:300] if err_msg else "ffmpeg 오류"}'}), 500

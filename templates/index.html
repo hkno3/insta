@@ -117,7 +117,7 @@
       justify-content: center;
     }
 
-    /* ── 자막 입력 ── */
+    /* ── 자막 / 전환 입력 ── */
     .caption-input {
       width: 100%;
       padding: 6px 8px;
@@ -132,6 +132,27 @@
     }
     .caption-input::placeholder { color: #bbb; }
     .caption-input:focus { background: #fff0f3; border-top-color: #f5576c; }
+
+    .trans-select {
+      width: 100%;
+      padding: 5px 8px;
+      font-size: 0.75rem;
+      border: none;
+      border-top: 1.5px solid #f0f0f0;
+      outline: none;
+      background: #f5f5f5;
+      color: #555;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .trans-select:focus { background: #fff0f3; border-top-color: #f5576c; }
+    .trans-label {
+      font-size: 0.68rem;
+      color: #aaa;
+      padding: 3px 8px 0;
+      background: #f5f5f5;
+      display: block;
+    }
 
     /* ── 설정 ── */
     .settings { margin-bottom: 24px; }
@@ -284,7 +305,7 @@
       </div>
     </div>
     <div class="setting-row">
-      <label>전환 효과</label>
+      <label>기본 전환 효과</label>
       <div class="control">
         <select id="transition-select">
           <option value="fade">페이드 (Fade)</option>
@@ -355,6 +376,7 @@
       const url = URL.createObjectURL(file);
       const item = document.createElement('div');
       item.className = 'preview-item';
+      const defaultTrans = transSelect.value;
       item.innerHTML = `
         <div class="preview-img-wrap">
           <img src="${url}" alt="photo ${i+1}" />
@@ -362,6 +384,12 @@
           <button class="remove-btn" title="삭제">×</button>
         </div>
         <textarea class="caption-input" placeholder="자막 입력 (선택)" rows="2"></textarea>
+        <span class="trans-label">↓ 다음으로 전환</span>
+        <select class="trans-select">
+          <option value="fade" ${defaultTrans==='fade'?'selected':''}>페이드</option>
+          <option value="slide" ${defaultTrans==='slide'?'selected':''}>슬라이드</option>
+          <option value="none" ${defaultTrans==='none'?'selected':''}>없음</option>
+        </select>
       `;
       item.querySelector('.remove-btn').addEventListener('click', () => removeFile(i));
       previewGrid.appendChild(item);
@@ -380,19 +408,28 @@
     durationLabel.textContent = durationRange.value + '초';
   });
 
+  // 기본 전환 효과 변경 시 모든 카드 동기화
+  transSelect.addEventListener('change', () => {
+    previewGrid.querySelectorAll('.trans-select').forEach(sel => {
+      sel.value = transSelect.value;
+    });
+  });
+
   // 영상 생성
   createBtn.addEventListener('click', async () => {
     if (selectedFiles.length === 0) return;
 
-    // 자막 수집
+    // 자막 및 전환 효과 수집
     const captions = Array.from(previewGrid.querySelectorAll('.caption-input'))
       .map(el => el.value.trim());
+    const transitions = Array.from(previewGrid.querySelectorAll('.trans-select'))
+      .map(el => el.value);
 
     const formData = new FormData();
     selectedFiles.forEach(f => formData.append('photos', f));
     formData.append('duration', durationRange.value);
-    formData.append('transition', transSelect.value);
     formData.append('captions', JSON.stringify(captions));
+    formData.append('transitions', JSON.stringify(transitions));
 
     createBtn.disabled = true;
     statusEl.textContent = '영상을 만드는 중입니다… 잠시만 기다려 주세요.';
