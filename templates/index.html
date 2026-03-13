@@ -514,23 +514,14 @@
     display: flex; flex-direction: column;
   }
   .rss-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.10); }
-  .rss-card-thumb {
-    width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block;
-    background: #ebebeb;
-  }
-  .rss-card-thumb-placeholder {
-    width: 100%; aspect-ratio: 16/9; background: linear-gradient(135deg,#f5576c22,#fda08522);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.6rem;
-  }
-  .rss-card-body { padding: 8px 10px 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .rss-card-body { padding: 10px 12px 12px; flex: 1; display: flex; flex-direction: column; gap: 5px; }
   .rss-card-title { font-size: .72rem; font-weight: 700; color: #222; line-height: 1.35;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .rss-card-desc { font-size: .64rem; color: #888; line-height: 1.4;
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
   .rss-card-skeleton {
     flex: 0 0 170px; border-radius: 12px; background: #f0f0f0;
-    height: 160px; animation: rss-shimmer 1.2s ease-in-out infinite;
+    height: 100px; animation: rss-shimmer 1.2s ease-in-out infinite;
   }
   @keyframes rss-shimmer { 0%,100%{opacity:.5} 50%{opacity:1} }
   </style>
@@ -1802,9 +1793,6 @@ createBtn.addEventListener('click', () => {
     if (!Array.isArray(data) || data.length === 0) { wrap.innerHTML = ''; return; }
     wrap.innerHTML = data.map(item => `
       <a class="rss-card" href="${item.link}" target="_blank" rel="noopener">
-        ${item.thumb
-          ? `<img class="rss-card-thumb" src="/img-proxy?url=${encodeURIComponent(item.thumb)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'rss-card-thumb-placeholder',textContent:'📝'}))">`
-          : `<div class="rss-card-thumb-placeholder">📝</div>`}
         <div class="rss-card-body">
           <div class="rss-card-title">${item.title}</div>
           ${item.desc ? `<div class="rss-card-desc">${item.desc}</div>` : ''}
