@@ -371,6 +371,54 @@
     }
     .music-clear-btn:hover { color: #f5576c; }
     #music-volume-row { display: none; }
+    #music-trim-row { display: none; }
+    .music-trim-wrap {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 10px 14px; background: #fafafa; border-radius: 10px;
+      border: 1.5px solid #f0f0f0;
+    }
+    .music-trim-header {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .music-trim-label { font-size: .8rem; font-weight: 700; color: #666; }
+    .music-trim-time  { font-size: .8rem; color: #f5576c; font-weight: 700; font-variant-numeric: tabular-nums; }
+    /* 듀얼 슬라이더 */
+    .dual-range-wrap {
+      position: relative; height: 20px; user-select: none;
+    }
+    .dual-range-track {
+      position: absolute; top: 50%; left: 0; right: 0; height: 6px;
+      transform: translateY(-50%); background: #e0e0e0; border-radius: 3px;
+    }
+    .dual-range-fill {
+      position: absolute; height: 100%;
+      background: linear-gradient(90deg, #f5576c, #fda085); border-radius: 3px;
+    }
+    .dual-range-wrap input[type=range] {
+      position: absolute; width: 100%; pointer-events: none;
+      -webkit-appearance: none; appearance: none;
+      background: transparent; height: 6px; top: 50%; transform: translateY(-50%);
+      margin: 0;
+    }
+    .dual-range-wrap input[type=range]::-webkit-slider-thumb {
+      pointer-events: all; -webkit-appearance: none;
+      width: 18px; height: 18px;
+      background: #fff; border: 2.5px solid #f5576c; border-radius: 50%; cursor: pointer;
+    }
+    .dual-range-wrap input[type=range]::-moz-range-thumb {
+      pointer-events: all; width: 16px; height: 16px;
+      background: #fff; border: 2.5px solid #f5576c; border-radius: 50%; cursor: pointer;
+    }
+    .music-preview-btn {
+      background: none; border: 1.5px solid #f5576c; color: #f5576c;
+      border-radius: 20px; padding: 3px 12px; font-size: .75rem; font-weight: 700;
+      cursor: pointer; white-space: nowrap; transition: background .15s, color .15s;
+    }
+    .music-preview-btn:hover { background: #f5576c; color: #fff; }
+    .music-trim-times {
+      display: flex; justify-content: space-between;
+      font-size: .72rem; color: #aaa;
+    }
   </style>
 </head>
 <body>
@@ -433,6 +481,24 @@
           <div class="control">
             <input type="range" id="music-volume" min="0" max="2" step="0.05" value="1" />
             <span id="music-volume-label">100%</span>
+          </div>
+        </div>
+        <div id="music-trim-row">
+          <div class="music-trim-wrap">
+            <div class="music-trim-header">
+              <span class="music-trim-label">✂️ 구간 설정</span>
+              <span class="music-trim-time" id="music-trim-display">0:00 – 0:00</span>
+              <button class="music-preview-btn" id="music-preview-btn">▶ 미리듣기</button>
+            </div>
+            <div class="dual-range-wrap" id="dual-range-wrap">
+              <div class="dual-range-track"><div class="dual-range-fill" id="dual-range-fill"></div></div>
+              <input type="range" id="music-start-range" min="0" max="100" step="0.1" value="0" />
+              <input type="range" id="music-end-range"   min="0" max="100" step="0.1" value="100" />
+            </div>
+            <div class="music-trim-times">
+              <span id="music-trim-left">0:00</span>
+              <span id="music-trim-right">0:00</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1045,19 +1111,90 @@ function collectFormData() {
   if (selectedMusicFile) {
     fd.append('music', selectedMusicFile);
     fd.append('music_volume', document.getElementById('music-volume').value);
+    fd.append('music_start',  musicStartSec.toFixed(2));
+    fd.append('music_end',    musicEndSec > 0 ? musicEndSec.toFixed(2) : '');
   }
   return fd;
 }
 
 /* ── 음악 업로드 UI ── */
 let selectedMusicFile = null;
+let musicDuration     = 0;
+let musicStartSec     = 0;
+let musicEndSec       = 0;
+let previewAudio      = null;
+
 const musicUploadArea = document.getElementById('music-upload-area');
 const musicInput      = document.getElementById('music-input');
 const musicText       = document.getElementById('music-text');
 const musicClearBtn   = document.getElementById('music-clear-btn');
 const musicVolumeRow  = document.getElementById('music-volume-row');
+const musicTrimRow    = document.getElementById('music-trim-row');
 const musicVolumeEl   = document.getElementById('music-volume');
 const musicVolumeLabel= document.getElementById('music-volume-label');
+const startRange      = document.getElementById('music-start-range');
+const endRange        = document.getElementById('music-end-range');
+const fillEl          = document.getElementById('dual-range-fill');
+const trimDisplay     = document.getElementById('music-trim-display');
+const trimLeft        = document.getElementById('music-trim-left');
+const trimRight       = document.getElementById('music-trim-right');
+const previewBtn      = document.getElementById('music-preview-btn');
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+function updateFill() {
+  const lo = parseFloat(startRange.value), hi = parseFloat(endRange.value);
+  const max = parseFloat(startRange.max) || 100;
+  fillEl.style.left  = (lo / max * 100) + '%';
+  fillEl.style.width = ((hi - lo) / max * 100) + '%';
+  musicStartSec = lo / max * musicDuration;
+  musicEndSec   = hi / max * musicDuration;
+  trimDisplay.textContent = fmtTime(musicStartSec) + ' – ' + fmtTime(musicEndSec);
+  trimLeft.textContent    = fmtTime(musicStartSec);
+  trimRight.textContent   = fmtTime(musicEndSec);
+}
+
+startRange.addEventListener('input', () => {
+  if (parseFloat(startRange.value) >= parseFloat(endRange.value) - 1)
+    startRange.value = parseFloat(endRange.value) - 1;
+  updateFill();
+  if (hasGenerated) scheduleRegen();
+});
+endRange.addEventListener('input', () => {
+  if (parseFloat(endRange.value) <= parseFloat(startRange.value) + 1)
+    endRange.value = parseFloat(startRange.value) + 1;
+  updateFill();
+  if (hasGenerated) scheduleRegen();
+});
+
+previewBtn.addEventListener('click', () => {
+  if (!selectedMusicFile) return;
+  if (previewAudio) { previewAudio.pause(); previewAudio = null; previewBtn.textContent = '▶ 미리듣기'; return; }
+  previewAudio = new Audio(URL.createObjectURL(selectedMusicFile));
+  previewAudio.currentTime = musicStartSec;
+  previewAudio.volume = Math.min(1, parseFloat(musicVolumeEl.value));
+  previewAudio.play();
+  previewBtn.textContent = '■ 정지';
+  const stopAt = musicEndSec > musicStartSec ? musicEndSec : musicDuration;
+  previewAudio.addEventListener('timeupdate', () => {
+    if (previewAudio && previewAudio.currentTime >= stopAt) {
+      previewAudio.pause(); previewAudio = null; previewBtn.textContent = '▶ 미리듣기';
+    }
+  });
+  previewAudio.addEventListener('ended', () => { previewAudio = null; previewBtn.textContent = '▶ 미리듣기'; });
+});
+
+function resetMusicTrim(duration) {
+  musicDuration = duration;
+  const max = Math.ceil(duration * 10);
+  startRange.max = max; startRange.value = 0;
+  endRange.max   = max; endRange.value   = max;
+  updateFill();
+  trimRight.textContent = fmtTime(duration);
+}
 
 musicUploadArea.addEventListener('click', e => {
   if (e.target === musicClearBtn) return;
@@ -1073,18 +1210,29 @@ musicInput.addEventListener('change', () => {
   musicUploadArea.classList.add('has-file');
   musicClearBtn.style.display = '';
   musicVolumeRow.style.display = '';
+  musicTrimRow.style.display = '';
+  // 오디오 길이 읽기
+  const tmp = new Audio(URL.createObjectURL(file));
+  tmp.addEventListener('loadedmetadata', () => {
+    resetMusicTrim(tmp.duration);
+    tmp.src = '';
+  });
   if (hasGenerated) scheduleRegen();
 });
 
 musicClearBtn.addEventListener('click', e => {
   e.stopPropagation();
+  if (previewAudio) { previewAudio.pause(); previewAudio = null; }
   selectedMusicFile = null;
+  musicDuration = 0; musicStartSec = 0; musicEndSec = 0;
   musicInput.value = '';
   musicText.textContent = '클릭해서 음악 파일 선택 (MP3·WAV·AAC·M4A 등)';
   musicText.classList.remove('selected');
   musicUploadArea.classList.remove('has-file');
   musicClearBtn.style.display = 'none';
   musicVolumeRow.style.display = 'none';
+  musicTrimRow.style.display = 'none';
+  previewBtn.textContent = '▶ 미리듣기';
   if (hasGenerated) scheduleRegen();
 });
 

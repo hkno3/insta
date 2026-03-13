@@ -427,21 +427,46 @@ def make_video(media_paths: list[Path], output_path: Path,
 
 
 def add_background_music(video_path: Path, music_path: Path, output_path: Path,
-                          volume: float = 1.0) -> tuple[bool, str]:
-    """완성된 영상에 배경음악 추가. 음악이 짧으면 반복, 길면 자름."""
-    cmd = [
-        'ffmpeg', '-y',
-        '-i', str(video_path),
-        '-stream_loop', '-1', '-i', str(music_path),
-        '-filter_complex',
-        f'[1:a]volume={volume:.2f}[a]',
-        '-map', '0:v',
-        '-map', '[a]',
-        '-shortest',
-        '-c:v', 'copy',
-        '-c:a', 'aac', '-b:a', '192k',
-        str(output_path),
-    ]
+                          volume: float = 1.0,
+                          start_sec: float = 0.0,
+                          end_sec: float = 0.0) -> tuple[bool, str]:
+    """완성된 영상에 배경음악 추가.
+    start_sec: 음악 시작 위치(초). end_sec > start_sec이면 해당 구간만 반복.
+    음악이 영상보다 짧으면 반복, 길면 자름."""
+    has_end = end_sec > start_sec
+
+    if has_end:
+        # 특정 구간을 잘라서 무한 반복
+        seg_dur = end_sec - start_sec
+        audio_filter = (
+            f'[1:a]atrim=start={start_sec:.2f}:end={end_sec:.2f},'
+            f'asetpts=PTS-STARTPTS,'
+            f'aloop=loop=-1:size=2147483647,'
+            f'volume={volume:.2f}[a]'
+        )
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', str(video_path),
+            '-i', str(music_path),
+            '-filter_complex', audio_filter,
+            '-map', '0:v', '-map', '[a]',
+            '-shortest',
+            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+            str(output_path),
+        ]
+    else:
+        # 시작 위치만 지정, 음악이 짧으면 반복
+        audio_filter = f'[1:a]volume={volume:.2f}[a]'
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', str(video_path),
+            '-stream_loop', '-1', '-ss', f'{start_sec:.2f}', '-i', str(music_path),
+            '-filter_complex', audio_filter,
+            '-map', '0:v', '-map', '[a]',
+            '-shortest',
+            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+            str(output_path),
+        ]
     return run_ffmpeg(cmd)
 
 
@@ -461,6 +486,9 @@ def create_video():
     files = request.files.getlist('photos')
     music_file = request.files.get('music')
     music_volume = float(request.form.get('music_volume', 1.0))
+    music_start  = float(request.form.get('music_start', 0.0))
+    music_end_raw = request.form.get('music_end', '')
+    music_end    = float(music_end_raw) if music_end_raw else 0.0
     duration = float(request.form.get('duration', 3.0))
     captions_json       = request.form.get('captions',       '[]')
     transitions_json    = request.form.get('transitions',    '[]')
@@ -533,7 +561,8 @@ def create_video():
             music_path = job_dir / f'music.{music_ext}'
             music_file.save(music_path)
             output_path = OUTPUT_FOLDER / f'{job_id}_final.mp4'
-            ok, err = add_background_music(video_path, music_path, output_path, music_volume)
+            ok, err = add_background_music(video_path, music_path, output_path,
+                                           music_volume, music_start, music_end)
             if ok:
                 video_path.unlink(missing_ok=True)
                 output_path.rename(video_path)
