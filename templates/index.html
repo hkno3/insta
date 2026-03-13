@@ -325,6 +325,12 @@
     .progress-bar-wrap { height: 8px; background: #f0f0f0; border-radius: 4px; margin-top: 10px; overflow: hidden; display: none; }
     .progress-bar { height: 100%; background: linear-gradient(90deg, #f5576c, #fda085); border-radius: 4px; animation: progress-anim 2s ease-in-out infinite; }
     @keyframes progress-anim { 0%{width:10%} 50%{width:80%} 100%{width:10%} }
+    #video-placeholder {
+      margin-top: 14px; border-radius: 14px; background: #f0f0f0;
+      aspect-ratio: var(--preview-ratio, 9/16); display: flex; align-items: center; justify-content: center;
+    }
+    #video-placeholder-inner { text-align: center; color: #bbb; font-size: 2.5rem; }
+    #video-placeholder-inner p { font-size: .85rem; margin-top: 8px; line-height: 1.5; color: #bbb; }
     .video-wrap { position: relative; border-radius: 14px; overflow: hidden; background: #000; margin-top: 14px; }
     #preview-video { width: 100%; max-height: 480px; display: block; }
     .video-overlay {
@@ -572,12 +578,15 @@
     <button id="create-btn" disabled>영상 만들기</button>
   </div>
 
-  <div class="right-panel" id="right-panel" style="display:none;">
+  <div class="right-panel" id="right-panel">
     <div class="right-panel-inner">
       <p class="right-panel-title">🎬 미리보기</p>
       <div id="change-banner">⚡ 변경사항 있음<button id="regen-btn">↺ 영상 업데이트</button></div>
       <div id="status"></div>
       <div class="progress-bar-wrap" id="progress-wrap"><div class="progress-bar"></div></div>
+      <div id="video-placeholder">
+        <div id="video-placeholder-inner">🎬<p>사진을 업로드하고<br>영상 만들기를 눌러주세요</p></div>
+      </div>
       <div class="video-wrap" id="video-wrap" style="display:none;">
         <video id="preview-video" controls playsinline></video>
         <div class="video-overlay" id="video-overlay">
@@ -813,6 +822,10 @@ const previewVideo   = document.getElementById('preview-video');
 const videoWrap      = document.getElementById('video-wrap');
 const videoOverlay   = document.getElementById('video-overlay');
 const changeBanner   = document.getElementById('change-banner');
+const videoPlaceholder = document.getElementById('video-placeholder');
+
+/* 초기 레이아웃: 우측 패널 처음부터 표시 */
+mainCard.classList.add('edit-mode');
 
 TRANSITIONS.forEach(t => {
   const o = document.createElement('option');
@@ -1683,8 +1696,7 @@ async function generateVideo(isRegen = false) {
   changeBanner.style.display = 'none';
 
   if (!isRegen) {
-    rightPanel.style.display = 'block';
-    mainCard.classList.add('edit-mode');
+    videoPlaceholder.style.display = 'none';
     statusEl.textContent = '영상을 만드는 중입니다…';
     statusEl.className = '';
     progressWrap.style.display = 'block';
