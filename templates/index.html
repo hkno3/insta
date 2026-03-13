@@ -122,13 +122,17 @@
 
     /* ── 자막 미리보기 오버레이 ── */
     .caption-overlay {
-      position: absolute; left: 0; right: 0;
-      bottom: 12%; text-align: center;
-      padding: 2px 4px; font-weight: 700; line-height: 1.3;
-      background: rgba(0,0,0,0.5); pointer-events: none;
-      z-index: 6; word-break: break-all; display: none;
-      white-space: pre-wrap;
+      position: absolute;
+      left: 50%; top: 88%;
+      transform: translateX(-50%);
+      text-align: center; max-width: 90%;
+      padding: 2px 5px; font-weight: 700; line-height: 1.3;
+      background: rgba(0,0,0,0.5);
+      pointer-events: auto; cursor: grab;
+      z-index: 6; word-break: break-word; display: none;
+      white-space: pre-wrap; user-select: none;
     }
+    .caption-overlay.dragging { cursor: grabbing; }
 
     /* ── 스티커 오버레이 ── */
     .sticker-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
@@ -552,11 +556,12 @@ TRANSITIONS.forEach(t => {
 });
 
 /* ── 상태 ── */
-let selectedFiles    = [];
-let stickersPerPhoto = [];
-let hasGenerated     = false;
-let debounceTimer    = null;
-let isGenerating     = false;
+let selectedFiles      = [];
+let stickersPerPhoto   = [];
+let captionPositions   = [];   // [{x:0.5, y:0.88}, ...]
+let hasGenerated       = false;
+let debounceTimer      = null;
+let isGenerating       = false;
 
 /* ── 드래그/리사이즈 상태 ── */
 let interaction = null;
@@ -643,7 +648,17 @@ function refreshStickerLayer(item, photoIdx) {
 /* ── 전역 mousemove/up ── */
 function handleMove(cx, cy) {
   if (!interaction) return;
-  const { type, node, photoIdx, stkIdx, W, H } = interaction;
+  const { type, photoIdx, W, H } = interaction;
+  if (type === 'caption') {
+    const dx = cx - interaction.startMx, dy = cy - interaction.startMy;
+    const pos = captionPositions[photoIdx];
+    pos.x = Math.max(0.05, Math.min(0.95, interaction.origX + dx / W));
+    pos.y = Math.max(0.02, Math.min(0.95, interaction.origY + dy / H));
+    interaction.overlay.style.left = (pos.x * 100) + '%';
+    interaction.overlay.style.top  = (pos.y * 100) + '%';
+    return;
+  }
+  const { node, stkIdx } = interaction;
   const s = stickersPerPhoto[photoIdx][stkIdx];
   if (type === 'drag') {
     const dx = cx - interaction.startMx, dy = cy - interaction.startMy;
@@ -659,7 +674,11 @@ function handleMove(cx, cy) {
 }
 function handleEnd() {
   if (!interaction) return;
-  interaction.node.classList.remove('active');
+  if (interaction.type === 'caption') {
+    interaction.overlay.classList.remove('dragging');
+  } else {
+    interaction.node.classList.remove('active');
+  }
   interaction = null;
   if (hasGenerated) scheduleRegen();
 }
@@ -714,12 +733,13 @@ const ACCEPTED = f => f.type.startsWith('image/') || f.type.startsWith('video/')
 function addFiles(files) {
   const valid = files.filter(ACCEPTED);
   selectedFiles = [...selectedFiles, ...valid];
-  valid.forEach(() => stickersPerPhoto.push([]));
+  valid.forEach(() => { stickersPerPhoto.push([]); captionPositions.push({x:0.5, y:0.88}); });
   renderPreviews();
 }
 function removeFile(idx) {
   selectedFiles.splice(idx, 1);
   stickersPerPhoto.splice(idx, 1);
+  captionPositions.splice(idx, 1);
   renderPreviews();
   if (hasGenerated) scheduleRegen();
 }
@@ -818,16 +838,39 @@ function renderPreviews() {
       const bcKey    = activeBc ? activeBc.dataset.boxcolor : null;
       const bgCSS    = bcKey != null ? (BC_CSS[bcKey] || (bcKey === 'none' ? 'transparent' : 'rgba(0,0,0,.5)'))
                                      : (boxPicker.value + 'aa');
+      const pos = captionPositions[i];
       if (text.trim()) {
         captionOverlay.style.display    = 'block';
         captionOverlay.textContent      = text;
         captionOverlay.style.color      = color;
         captionOverlay.style.fontSize   = dispSize + 'px';
         captionOverlay.style.background = bgCSS;
+        captionOverlay.style.left       = (pos.x * 100) + '%';
+        captionOverlay.style.top        = (pos.y * 100) + '%';
       } else {
         captionOverlay.style.display = 'none';
       }
     }
+
+    // 자막 오버레이 드래그
+    captionOverlay.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const wrap = item.querySelector('.preview-img-wrap');
+      const pos  = captionPositions[i];
+      captionOverlay.classList.add('dragging');
+      interaction = { type:'caption', photoIdx:i, overlay:captionOverlay,
+        startMx:e.clientX, startMy:e.clientY, origX:pos.x, origY:pos.y,
+        W:wrap.offsetWidth, H:wrap.offsetHeight };
+    });
+    captionOverlay.addEventListener('touchstart', e => {
+      e.preventDefault(); e.stopPropagation();
+      const wrap = item.querySelector('.preview-img-wrap');
+      const pos  = captionPositions[i];
+      captionOverlay.classList.add('dragging');
+      interaction = { type:'caption', photoIdx:i, overlay:captionOverlay,
+        startMx:e.touches[0].clientX, startMy:e.touches[0].clientY, origX:pos.x, origY:pos.y,
+        W:wrap.offsetWidth, H:wrap.offsetHeight };
+    }, {passive:false});
 
     captionInput.addEventListener('input', () => { updateCaptionOverlay(); if (hasGenerated) scheduleRegen(); });
 
@@ -948,7 +991,7 @@ function scheduleRegen() {
 function collectFormData() {
   const captions    = Array.from(previewGrid.querySelectorAll('.caption-input')).map(el => el.value.trim());
   const transitions = Array.from(previewGrid.querySelectorAll('.trans-select')).map(el => el.value);
-  const captionStyles = Array.from(previewGrid.querySelectorAll('.preview-controls')).map(ctrl => {
+  const captionStyles = Array.from(previewGrid.querySelectorAll('.preview-controls')).map((ctrl, idx) => {
     const activeSw  = ctrl.querySelector('.cswatch.active');
     const picker    = ctrl.querySelector('.caption-color-picker');
     const color     = activeSw ? activeSw.dataset.color : picker.value;
@@ -956,7 +999,8 @@ function collectFormData() {
     const activeBc  = ctrl.querySelector('.bcswatch.active');
     const bpicker   = ctrl.querySelector('.boxcolor-picker');
     const boxColor  = activeBc ? activeBc.dataset.boxcolor : (bpicker.value + '@0.65');
-    return { color, fontSize, boxColor };
+    const pos       = captionPositions[idx] || {x:0.5, y:0.88};
+    return { color, fontSize, boxColor, captionX: pos.x, captionY: pos.y };
   });
   const fd = new FormData();
   selectedFiles.forEach(f => fd.append('photos', f));

@@ -100,7 +100,8 @@ def _to_ffmpeg_color(color: str) -> str:
 
 def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
                           font_size: int = 55, color: str = 'white',
-                          box_color: str = 'black@0.5') -> str:
+                          box_color: str = 'black@0.5',
+                          x_rel: float = 0.5, y_rel: float = 0.88) -> str:
     if not text or not text.strip():
         return ''
     font_path = get_font_path()
@@ -109,20 +110,21 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
     if len(fp) >= 2 and fp[1] == ':':
         fp = fp[0] + '\\:' + fp[2:]
     font_part = f"fontfile='{fp}':" if fp else ''
-    y_pos = height - font_size * 3
     fc = _to_ffmpeg_color(color)
     if not box_color or box_color == 'none':
         box_part = 'box=0'
     else:
         bc = _to_ffmpeg_color(box_color)
         box_part = f'box=1:boxcolor={bc}:boxborderw=14'
+    x_expr = f'(w*{x_rel:.4f}-text_w/2)'
+    y_expr = f'(h*{y_rel:.4f})'
     return (
         f"drawtext={font_part}"
         f"text='{escaped}':"
         f"fontcolor={fc}:"
         f"fontsize={font_size}:"
-        f"x=(w-text_w)/2:"
-        f"y={y_pos}:"
+        f"x={x_expr}:"
+        f"y={y_expr}:"
         f"{box_part}"
     )
 
@@ -228,7 +230,9 @@ def make_image_clip(img_path: Path, clip_path: Path, duration: float,
     font_size = int(style.get('fontSize', 55))
     color     = style.get('color', 'white') or 'white'
     box_color = style.get('boxColor', 'black@0.5')
-    cap   = build_caption_filter(caption, height, font_size, color, box_color)
+    x_rel     = float(style.get('captionX', 0.5))
+    y_rel     = float(style.get('captionY', 0.88))
+    cap   = build_caption_filter(caption, height, font_size, color, box_color, x_rel, y_rel)
     valid = _build_valid_stickers(stickers)
 
     if not valid:
@@ -269,7 +273,9 @@ def make_video_clip(video_path: Path, clip_path: Path,
     font_size = int(style.get('fontSize', 55))
     color     = style.get('color', 'white') or 'white'
     box_color = style.get('boxColor', 'black@0.5')
-    cap   = build_caption_filter(caption, height, font_size, color, box_color)
+    x_rel     = float(style.get('captionX', 0.5))
+    y_rel     = float(style.get('captionY', 0.88))
+    cap   = build_caption_filter(caption, height, font_size, color, box_color, x_rel, y_rel)
     valid = _build_valid_stickers(stickers)
     scale_crop = (f'scale={width}:{height}'
                   f':force_original_aspect_ratio=increase,'
