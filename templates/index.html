@@ -1109,7 +1109,7 @@ function renderPreviews() {
           <div class="pm-trim-section">
             <div class="pm-trim-header">
               <span class="pm-trim-label">✂️ 구간</span>
-              <span class="pm-trim-display">0.0s – 끝</span>
+              <span class="pm-trim-display">0:00 – 끝</span>
             </div>
             <div class="dual-range-wrap">
               <div class="dual-range-track">
@@ -1174,8 +1174,8 @@ function renderPreviews() {
       const pct  = v => (v / dur * 100).toFixed(1);
       pmTrimFill.style.left  = pct(s) + '%';
       pmTrimFill.style.width = Math.max(0, pct(e) - pct(s)) + '%';
-      const endLabel = e >= dur - 0.05 ? '끝' : e.toFixed(1) + 's';
-      pmTrimDisp.textContent = s.toFixed(1) + 's – ' + endLabel;
+      const endLabel = e >= dur - 0.05 ? '끝' : fmtTime(e);
+      pmTrimDisp.textContent = fmtTime(s) + ' – ' + endLabel;
       photoMusicTrimStarts[i] = s;
       photoMusicTrimEnds[i]   = e >= dur - 0.05 ? 0 : e;
     }
