@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>인스타그램 영상 만들기</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #fda085 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 24px;
+      padding: 40px;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 800;
+      text-align: center;
+      background: linear-gradient(90deg, #f5576c, #fda085);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #888;
+      font-size: 0.9rem;
+      margin-bottom: 32px;
+    }
+
+    /* ── 드래그 앤 드롭 존 ── */
+    .drop-zone {
+      border: 2.5px dashed #f5576c;
+      border-radius: 16px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      margin-bottom: 20px;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      background: #fff0f3;
+      border-color: #f093fb;
+    }
+    .drop-zone .icon { font-size: 3rem; margin-bottom: 12px; }
+    .drop-zone p { color: #555; font-size: 0.95rem; }
+    .drop-zone span { color: #f5576c; font-weight: 700; }
+    #file-input { display: none; }
+
+    /* ── 미리보기 그리드 ── */
+    #preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .preview-item {
+      position: relative;
+      aspect-ratio: 9/16;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .preview-item .order-badge {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .preview-item .remove-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: #f5576c;
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    /* ── 설정 ── */
+    .settings { margin-bottom: 24px; }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .setting-row label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #333;
+    }
+    .setting-row .control { display: flex; align-items: center; gap: 8px; }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 160px;
+      height: 6px;
+      background: #f5576c;
+      border-radius: 3px;
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border: 2.5px solid #f5576c;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    #duration-label { font-weight: 700; color: #f5576c; width: 36px; text-align: right; }
+
+    select {
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.9rem;
+      color: #333;
+      background: #fff;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus { border-color: #f5576c; }
+
+    /* ── 버튼 ── */
+    #create-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(90deg, #f5576c, #fda085);
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    #create-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    #create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── 진행 상태 ── */
+    #status {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 0.9rem;
+      color: #555;
+      min-height: 24px;
+    }
+    .progress-bar-wrap {
+      height: 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      margin-top: 10px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #f5576c, #fda085);
+      border-radius: 4px;
+      animation: progress-anim 2s ease-in-out infinite;
+    }
+    @keyframes progress-anim {
+      0%   { width: 10%; }
+      50%  { width: 80%; }
+      100% { width: 10%; }
+    }
+
+    /* ── 다운로드 ── */
+    #download-area {
+      display: none;
+      margin-top: 20px;
+      text-align: center;
+    }
+    #download-area a {
+      display: inline-block;
+      padding: 14px 32px;
+      background: #27ae60;
+      color: #fff;
+      font-weight: 700;
+      border-radius: 12px;
+      text-decoration: none;
+      font-size: 1rem;
+      transition: opacity 0.2s;
+    }
+    #download-area a:hover { opacity: 0.85; }
+    #download-area p { color: #888; font-size: 0.82rem; margin-top: 8px; }
+
+    .error-msg { color: #e74c3c; font-weight: 600; margin-top: 12px; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>📸 사진 → 인스타 영상</h1>
+  <p class="subtitle">사진을 올리면 1080×1920 (9:16) 세로 영상으로 만들어 드려요</p>
+
+  <!-- 업로드 존 -->
+  <div class="drop-zone" id="drop-zone">
+    <div class="icon">🖼️</div>
+    <p><span>클릭</span>하거나 사진을 여기에 드래그하세요</p>
+    <p style="font-size:0.8rem; color:#aaa; margin-top:6px;">JPG, PNG, WEBP 등 · 여러 장 동시 선택 가능</p>
+    <input type="file" id="file-input" accept="image/*" multiple />
+  </div>
+
+  <!-- 미리보기 -->
+  <div id="preview-grid"></div>
+
+  <!-- 설정 -->
+  <div class="settings">
+    <div class="setting-row">
+      <label>사진당 재생 시간</label>
+      <div class="control">
+        <input type="range" id="duration-range" min="1" max="10" step="0.5" value="3" />
+        <span id="duration-label">3초</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <label>전환 효과</label>
+      <div class="control">
+        <select id="transition-select">
+          <option value="fade">페이드 (Fade)</option>
+          <option value="slide">슬라이드 (Slide)</option>
+          <option value="none">없음 (None)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <button id="create-btn" disabled>영상 만들기</button>
+
+  <div id="status"></div>
+  <div class="progress-bar-wrap" id="progress-wrap">
+    <div class="progress-bar"></div>
+  </div>
+
+  <div id="download-area">
+    <a id="download-link" href="#" download="instagram_video.mp4">⬇️ 영상 다운로드</a>
+    <p>1080×1920 · MP4 형식</p>
+  </div>
+</div>
+
+<script>
+  const dropZone   = document.getElementById('drop-zone');
+  const fileInput  = document.getElementById('file-input');
+  const previewGrid = document.getElementById('preview-grid');
+  const createBtn  = document.getElementById('create-btn');
+  const durationRange = document.getElementById('duration-range');
+  const durationLabel = document.getElementById('duration-label');
+  const transSelect = document.getElementById('transition-select');
+  const statusEl   = document.getElementById('status');
+  const progressWrap = document.getElementById('progress-wrap');
+  const downloadArea = document.getElementById('download-area');
+  const downloadLink = document.getElementById('download-link');
+
+  let selectedFiles = [];
+
+  // 드래그 앤 드롭
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    addFiles(Array.from(e.dataTransfer.files));
+  });
+  fileInput.addEventListener('change', () => {
+    addFiles(Array.from(fileInput.files));
+    fileInput.value = '';
+  });
+
+  function addFiles(files) {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    selectedFiles = [...selectedFiles, ...imageFiles];
+    renderPreviews();
+  }
+
+  function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    renderPreviews();
+  }
+
+  function renderPreviews() {
+    previewGrid.innerHTML = '';
+    selectedFiles.forEach((file, i) => {
+      const url = URL.createObjectURL(file);
+      const item = document.createElement('div');
+      item.className = 'preview-item';
+      item.innerHTML = `
+        <img src="${url}" alt="photo ${i+1}" />
+        <span class="order-badge">${i + 1}</span>
+        <button class="remove-btn" title="삭제">×</button>
+      `;
+      item.querySelector('.remove-btn').addEventListener('click', () => removeFile(i));
+      previewGrid.appendChild(item);
+    });
+    createBtn.disabled = selectedFiles.length === 0;
+    downloadArea.style.display = 'none';
+    statusEl.textContent = selectedFiles.length > 0 ? `${selectedFiles.length}장 선택됨` : '';
+    statusEl.className = '';
+  }
+
+  // 슬라이더
+  durationRange.addEventListener('input', () => {
+    durationLabel.textContent = durationRange.value + '초';
+  });
+
+  // 영상 생성
+  createBtn.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) return;
+
+    const formData = new FormData();
+    selectedFiles.forEach(f => formData.append('photos', f));
+    formData.append('duration', durationRange.value);
+    formData.append('transition', transSelect.value);
+
+    createBtn.disabled = true;
+    statusEl.textContent = '영상을 만드는 중입니다… 잠시만 기다려 주세요.';
+    statusEl.className = '';
+    progressWrap.style.display = 'block';
+    downloadArea.style.display = 'none';
+
+    try {
+      const res = await fetch('/create', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        statusEl.textContent = '오류: ' + (data.error || '알 수 없는 오류');
+        statusEl.className = 'error-msg';
+      } else {
+        statusEl.textContent = '영상 생성 완료!';
+        downloadLink.href = '/download/' + data.video_id;
+        downloadArea.style.display = 'block';
+      }
+    } catch (err) {
+      statusEl.textContent = '네트워크 오류가 발생했습니다.';
+      statusEl.className = 'error-msg';
+    } finally {
+      progressWrap.style.display = 'none';
+      createBtn.disabled = selectedFiles.length === 0;
+    }
+  });
+</script>
+</body>
+</html>
