@@ -555,6 +555,7 @@ def _cleanup(tmp_dir: Path):
 
 
 RSS_URL = 'https://bodyandwell.com/feed'
+RSS_URL_BIZ = 'https://bizachieve.com/feed'
 
 @app.route('/img-proxy')
 def img_proxy():
@@ -587,6 +588,41 @@ def rss_feed():
             desc_raw = item.findtext('description') or ''
             desc  = re.sub(r'<[^>]+>', '', desc_raw).strip()[:120]
             # 썸네일: media:content > enclosure > description 내 img
+            thumb = None
+            mc = item.find('media:content', ns)
+            if mc is not None:
+                thumb = mc.get('url')
+            if not thumb:
+                enc = item.find('enclosure')
+                if enc is not None and (enc.get('type') or '').startswith('image'):
+                    thumb = enc.get('url')
+            if not thumb:
+                m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', desc_raw)
+                if m:
+                    thumb = m.group(1)
+            if title and link:
+                items.append({'title': title, 'link': link, 'desc': desc, 'thumb': thumb})
+            if len(items) >= 10:
+                break
+        return jsonify(items)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/rss-feed-biz')
+def rss_feed_biz():
+    try:
+        req = urllib.request.Request(RSS_URL_BIZ, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            raw = r.read()
+        root = ET.fromstring(raw)
+        ns = {'media': 'http://search.yahoo.com/mrss/', 'dc': 'http://purl.org/dc/elements/1.1/'}
+        items = []
+        for item in root.iter('item'):
+            title = (item.findtext('title') or '').strip()
+            link  = (item.findtext('link') or '').strip()
+            desc_raw = item.findtext('description') or ''
+            desc  = re.sub(r'<[^>]+>', '', desc_raw).strip()[:120]
             thumb = None
             mc = item.find('media:content', ns)
             if mc is not None:

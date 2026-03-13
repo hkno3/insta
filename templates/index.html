@@ -524,6 +524,24 @@
     height: 100px; animation: rss-shimmer 1.2s ease-in-out infinite;
   }
   @keyframes rss-shimmer { 0%,100%{opacity:.5} 50%{opacity:1} }
+  /* ── bizachieve RSS 카드 (우측 패널) ── */
+  #rss-section-biz {
+    margin: 16px -24px 0;
+    padding: 0 24px;
+    overflow: hidden;
+  }
+  #rss-section-biz .rss-label {
+    font-size: .7rem; font-weight: 700; color: #bbb; text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 8px;
+  }
+  #rss-scroll-wrap-biz {
+    overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: thin; scrollbar-color: #e0e0e0 transparent;
+    padding-bottom: 6px;
+  }
+  #rss-scroll-wrap-biz::-webkit-scrollbar { height: 4px; }
+  #rss-scroll-wrap-biz::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 2px; }
+  #rss-cards-biz { display: flex; gap: 10px; }
   </style>
 </head>
 <body>
@@ -638,6 +656,14 @@
       <div id="download-area">
         <a id="download-link" class="dl-btn" href="#" download="instagram_video.mp4">⬇️ 영상 다운로드</a>
         <p class="hint">설정을 바꾸면 자동으로 재생성돼요.</p>
+      </div>
+
+      <!-- bizachieve RSS 카드 -->
+      <div id="rss-section-biz">
+        <div class="rss-label">📰 비즈어치브 최신글</div>
+        <div id="rss-scroll-wrap-biz">
+          <div id="rss-cards-biz"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1790,6 +1816,23 @@ createBtn.addEventListener('click', () => {
   wrap.innerHTML = Array(5).fill('<div class="rss-card-skeleton"></div>').join('');
   try {
     const data = await fetch('/rss-feed').then(r => r.json());
+    if (!Array.isArray(data) || data.length === 0) { wrap.innerHTML = ''; return; }
+    wrap.innerHTML = data.map(item => `
+      <a class="rss-card" href="${item.link}" target="_blank" rel="noopener">
+        <div class="rss-card-body">
+          <div class="rss-card-title">${item.title}</div>
+          ${item.desc ? `<div class="rss-card-desc">${item.desc}</div>` : ''}
+        </div>
+      </a>`).join('');
+  } catch { wrap.innerHTML = ''; }
+})();
+
+/* ── bizachieve RSS 카드 로드 ── */
+(async () => {
+  const wrap = document.getElementById('rss-cards-biz');
+  wrap.innerHTML = Array(5).fill('<div class="rss-card-skeleton"></div>').join('');
+  try {
+    const data = await fetch('/rss-feed-biz').then(r => r.json());
     if (!Array.isArray(data) || data.length === 0) { wrap.innerHTML = ''; return; }
     wrap.innerHTML = data.map(item => `
       <a class="rss-card" href="${item.link}" target="_blank" rel="noopener">
