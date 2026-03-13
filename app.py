@@ -90,8 +90,17 @@ def escape_drawtext(text: str) -> str:
     return text
 
 
+def _to_ffmpeg_color(color: str) -> str:
+    """HTML #RRGGBB → ffmpeg 0xRRGGBB (@ opacity 부분은 그대로 유지)."""
+    if '@' in color:
+        col, alpha = color.split('@', 1)
+        return (_to_ffmpeg_color(col) + '@' + alpha)
+    return ('0x' + color[1:]) if color.startswith('#') else color
+
+
 def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
-                          font_size: int = 55, color: str = 'white') -> str:
+                          font_size: int = 55, color: str = 'white',
+                          box_color: str = 'black@0.5') -> str:
     if not text or not text.strip():
         return ''
     font_path = get_font_path()
@@ -101,8 +110,12 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         fp = fp[0] + '\\:' + fp[2:]
     font_part = f"fontfile='{fp}':" if fp else ''
     y_pos = height - font_size * 3
-    # Convert HTML hex (#RRGGBB) to ffmpeg format (0xRRGGBB)
-    fc = ('0x' + color[1:]) if color.startswith('#') else color
+    fc = _to_ffmpeg_color(color)
+    if not box_color or box_color == 'none':
+        box_part = 'box=0'
+    else:
+        bc = _to_ffmpeg_color(box_color)
+        box_part = f'box=1:boxcolor={bc}:boxborderw=14'
     return (
         f"drawtext={font_part}"
         f"text='{escaped}':"
@@ -110,7 +123,7 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         f"fontsize={font_size}:"
         f"x=(w-text_w)/2:"
         f"y={y_pos}:"
-        f"box=1:boxcolor=black@0.5:boxborderw=14"
+        f"{box_part}"
     )
 
 
@@ -214,7 +227,8 @@ def make_image_clip(img_path: Path, clip_path: Path, duration: float,
     style     = caption_style or {}
     font_size = int(style.get('fontSize', 55))
     color     = style.get('color', 'white') or 'white'
-    cap   = build_caption_filter(caption, height, font_size, color)
+    box_color = style.get('boxColor', 'black@0.5')
+    cap   = build_caption_filter(caption, height, font_size, color, box_color)
     valid = _build_valid_stickers(stickers)
 
     if not valid:
@@ -254,7 +268,8 @@ def make_video_clip(video_path: Path, clip_path: Path,
     style     = caption_style or {}
     font_size = int(style.get('fontSize', 55))
     color     = style.get('color', 'white') or 'white'
-    cap   = build_caption_filter(caption, height, font_size, color)
+    box_color = style.get('boxColor', 'black@0.5')
+    cap   = build_caption_filter(caption, height, font_size, color, box_color)
     valid = _build_valid_stickers(stickers)
     scale_crop = (f'scale={width}:{height}'
                   f':force_original_aspect_ratio=increase,'
