@@ -1289,7 +1289,7 @@ function renderPreviews() {
 
     if (!timedCaptionsPerPhoto[i]) timedCaptionsPerPhoto[i] = [];
     const mediaTpl = isVid
-      ? `<video src="${url}" muted playsinline preload="metadata"></video>
+      ? `<video src="${url}" playsinline preload="metadata"></video>
          <span class="video-badge">🎬 동영상</span>`
       : `<img src="${url}" alt="photo ${i+1}" />`;
 
@@ -1313,7 +1313,20 @@ function renderPreviews() {
         </div>` : ''}
       </div>
       <div class="preview-controls">
-        <textarea class="caption-input" placeholder="자막을 입력하세요 (선택사항)"></textarea>
+        ${isVid ? `<div class="timed-cap-wrap">
+          <div class="timed-cap-header">
+            <span class="style-label-sm">⏱ 구간 자막</span>
+            <button class="add-timed-cap-btn">+ 구간 추가</button>
+          </div>
+          <div class="timed-cap-list"></div>
+        </div>` : ''}
+        <div class="trans-row">
+          <span class="trans-label">↓ 전환</span>
+          <select class="trans-select">
+            ${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===dt?' selected':''}>${t.label}</option>`).join('')}
+          </select>
+        </div>
+        <textarea class="caption-input" placeholder="전체 자막 (선택사항)"></textarea>
         <div class="caption-style-row">
           <span class="style-label-sm">색상</span>
           <div class="color-swatches">
@@ -1337,19 +1350,6 @@ function renderPreviews() {
             <button class="bcswatch" data-boxcolor="#7b2d8b@0.65" style="background:rgba(123,45,139,.65);" title="보라"></button>
             <input type="color" class="boxcolor-picker" value="#000000" title="배경색 직접 선택" />
           </div>
-        </div>
-        ${isVid ? `<div class="timed-cap-wrap">
-          <div class="timed-cap-header">
-            <span class="style-label-sm">⏱ 구간 자막</span>
-            <button class="add-timed-cap-btn">+ 구간 추가</button>
-          </div>
-          <div class="timed-cap-list"></div>
-        </div>` : ''}
-        <div class="trans-row">
-          <span class="trans-label">↓ 전환</span>
-          <select class="trans-select">
-            ${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===dt?' selected':''}>${t.label}</option>`).join('')}
-          </select>
         </div>
         ${!isVid ? `<div class="photo-dur-row">
           <span class="trans-label">⏱ 재생</span>
