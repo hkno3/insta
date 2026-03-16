@@ -316,15 +316,17 @@ def make_video_clip(video_path: Path, clip_path: Path,
         tc_text = tc.get('text', '')
         if not tc_text:
             continue
+        tc_x = float(tc.get('x', x_rel))
+        tc_y = float(tc.get('y', y_rel))
         tc_cap = build_caption_filter(
             tc_text, height,
             int(tc.get('fontSize', font_size)),
             tc.get('color', color) or color,
             tc.get('boxColor', box_color) or box_color,
-            x_rel, y_rel,
+            tc_x, tc_y,
             start_sec=tc.get('start'), end_sec=tc.get('end'),
             effect=tc.get('effect'),
-            effect_duration=float(tc.get('effectDuration', 0.35)),
+            effect_duration=float(tc.get('effectDuration', 1.0)),
         )
         if tc_cap:
             cap_parts.append(tc_cap)
