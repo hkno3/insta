@@ -119,7 +119,8 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
                           start_sec: float | None = None,
                           end_sec: float | None = None,
                           effect: str | None = None,
-                          effect_duration: float = 0.35) -> str:
+                          effect_duration: float = 1.0,
+                          slide_range: int = 30) -> str:
     if not text or not text.strip():
         return ''
     font_path = get_font_path()
@@ -136,26 +137,52 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         box_part = f'box=1:boxcolor={bc}:boxborderw=14'
     x_expr = f'(w*{x_rel:.4f}-text_w/2)'
     y_expr = f'(h*{y_rel:.4f})'
-    result = (
+    extra = ''
+
+    if start_sec is not None or end_sec is not None:
+        t0 = start_sec if start_sec is not None else 0.0
+        t1 = end_sec if end_sec is not None else 99999.0
+        fade = max(0.05, float(effect_duration))
+        # slide_range is in preview px; multiply ~5x to get video pixels
+        slide = max(10, int(slide_range)) * 5
+        t_frac = f'max(0,min(1,(t-{t0:.3f})/{fade:.3f}))'
+        ena   = f"between(t,{t0:.3f},{t1:.3f})"
+
+        if effect == 'fade':
+            extra = (f":alpha='if({ena},if(lt(t-{t0:.3f},{fade:.3f})"
+                     f",(t-{t0:.3f})/{fade:.3f},1),0)':enable='{ena}'")
+        elif effect == 'slideup':
+            y_expr = f'((h*{y_rel:.4f})+{slide}*(1-{t_frac}))'
+            extra  = f":alpha='if({ena},{t_frac},0)':enable='{ena}'"
+        elif effect == 'slidedn':
+            y_expr = f'((h*{y_rel:.4f})-{slide}*(1-{t_frac}))'
+            extra  = f":alpha='if({ena},{t_frac},0)':enable='{ena}'"
+        elif effect == 'slideleft':
+            x_expr = f'((w*{x_rel:.4f}-text_w/2)-{slide}*(1-{t_frac}))'
+            extra  = f":alpha='if({ena},{t_frac},0)':enable='{ena}'"
+        elif effect == 'slideright':
+            x_expr = f'((w*{x_rel:.4f}-text_w/2)+{slide}*(1-{t_frac}))'
+            extra  = f":alpha='if({ena},{t_frac},0)':enable='{ena}'"
+        elif effect == 'blink':
+            half = fade / 2
+            extra = (f":alpha='if({ena},"
+                     f"if(lt(mod(t-{t0:.3f},{fade:.3f}),{half:.3f}),1,0),0)':enable='{ena}'")
+        elif effect in ('zoomin', 'zoomout', 'pop', 'roll'):
+            # FFmpeg drawtext doesn't support dynamic fontsize; fall back to fade-in
+            extra = (f":alpha='if({ena},if(lt(t-{t0:.3f},{fade:.3f})"
+                     f",(t-{t0:.3f})/{fade:.3f},1),0)':enable='{ena}'")
+        else:
+            extra = f":enable='{ena}'"
+
+    return (
         f"drawtext={font_part}"
         f"text='{escaped}':"
         f"fontcolor={fc}:"
         f"fontsize={font_size}:"
         f"x={x_expr}:"
         f"y={y_expr}:"
-        f"{box_part}"
+        f"{box_part}{extra}"
     )
-    if start_sec is not None or end_sec is not None:
-        t0 = start_sec if start_sec is not None else 0.0
-        t1 = end_sec if end_sec is not None else 99999.0
-        if effect == 'fade':
-            fade = max(0.05, float(effect_duration))
-            alpha_expr = (f"if(between(t,{t0:.3f},{t1:.3f}),"
-                          f"if(lt(t-{t0:.3f},{fade:.3f}),(t-{t0:.3f})/{fade:.3f},1),0)")
-            result += f":alpha='{alpha_expr}':enable='between(t,{t0:.3f},{t1:.3f})'"
-        else:
-            result += f":enable='between(t,{t0:.3f},{t1:.3f})'"
-    return result
 
 
 def prepare_image(src_path: Path, dst_path: Path,
@@ -327,6 +354,7 @@ def make_video_clip(video_path: Path, clip_path: Path,
             start_sec=tc.get('start'), end_sec=tc.get('end'),
             effect=tc.get('effect'),
             effect_duration=float(tc.get('effectDuration', 1.0)),
+            slide_range=int(tc.get('slideRange', 30)),
         )
         if tc_cap:
             cap_parts.append(tc_cap)
@@ -515,7 +543,8 @@ def add_audio_to_video(video_path: Path, output_path: Path,
                        bg_volume: float = 1.0,
                        bg_start: float = 0.0,
                        bg_end: float = 0.0,
-                       photo_music_list: list | None = None) -> tuple[bool, str]:
+                       photo_music_list: list | None = None,
+                       video_duration: float | None = None) -> tuple[bool, str]:
     """영상에 배경음악·효과음·사진별배경음 합성.
     photo_music_list: [(path, start_sec, duration, volume, trim_start, trim_end), ...]
     trim_start/trim_end: 0 means no trim (use full file)"""
@@ -586,10 +615,13 @@ def add_audio_to_video(video_path: Path, output_path: Path,
         out_label = 'aout'
         fc.append(f'{"".join(labels)}amix=inputs={len(labels)}:normalize=0[{out_label}]')
 
+    # 영상 길이 기준으로 출력 길이 고정 (-shortest 대신)
+    # -shortest는 오디오 스트림이 짧을 때 영상이 잘리는 문제 발생
+    out_dur = video_duration if video_duration else get_media_duration(video_path)
     cmd += [
         '-filter_complex', ';'.join(fc),
         '-map', '0:v', '-map', f'[{out_label}]',
-        '-shortest',
+        '-t', f'{out_dur:.3f}',
         '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
         str(output_path),
     ]
@@ -868,9 +900,10 @@ def create_video():
     # 오디오 합성
     if bg_path or sfx_list or photo_music_list:
         audio_out = OUTPUT_FOLDER / f'{job_id}_audio.mp4'
+        final_vid_dur = get_media_duration(video_path)  # 정확한 최종 영상 길이 측정
         ok, err = add_audio_to_video(video_path, audio_out, sfx_list,
                                      bg_path, music_volume, music_start, music_end,
-                                     photo_music_list)
+                                     photo_music_list, video_duration=final_vid_dur)
         if ok:
             video_path.unlink(missing_ok=True)
             audio_out.rename(video_path)
