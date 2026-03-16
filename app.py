@@ -309,7 +309,11 @@ def make_video_clip(video_path: Path, clip_path: Path,
         if not tc_text:
             continue
         tc_cap = build_caption_filter(
-            tc_text, height, font_size, color, box_color, x_rel, y_rel,
+            tc_text, height,
+            int(tc.get('fontSize', font_size)),
+            tc.get('color', color) or color,
+            tc.get('boxColor', box_color) or box_color,
+            x_rel, y_rel,
             start_sec=tc.get('start'), end_sec=tc.get('end'),
         )
         if tc_cap:

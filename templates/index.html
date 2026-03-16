@@ -123,26 +123,48 @@
       overflow: hidden;
     }
 
-    /* ── 동영상 재생 오버레이 ── */
-    .vid-play-overlay {
-      position: absolute; inset: 0; z-index: 7;
+    /* ── 동영상 왼쪽 컬럼 래퍼 ── */
+    .preview-left {
+      flex-shrink: 0; width: 220px;
       display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      cursor: pointer; transition: background .15s;
+      border-radius: 14px 0 0 14px; overflow: hidden;
     }
-    .vid-play-overlay:hover { background: rgba(0,0,0,.12); }
-    .vid-play-icon {
-      font-size: 2.2rem; color: rgba(255,255,255,.92);
-      text-shadow: 0 2px 10px rgba(0,0,0,.6);
-      opacity: 0; transition: opacity .15s; pointer-events: none;
+    /* preview-img-wrap은 preview-left 안으로 이동하므로 너비/border-radius 조정 */
+    .preview-left .preview-img-wrap {
+      width: 100%; border-radius: 0; flex: none;
     }
-    .vid-play-overlay.paused .vid-play-icon { opacity: 1; }
-    .vid-play-overlay:hover .vid-play-icon { opacity: 1; }
+
+    /* ── 동영상 컨트롤 바 (영상 아래) ── */
+    .vid-controls-bar {
+      background: #f7f7f7; border-top: 1px solid #e8e8e8;
+      padding: 5px 8px 6px;
+    }
+    .vid-progress-wrap { padding: 2px 0 4px; }
+    .vid-progress {
+      width: 100%; height: 3px; cursor: pointer;
+      -webkit-appearance: none; appearance: none;
+      border-radius: 2px; outline: none;
+      background: linear-gradient(to right, #f5576c 0%, #f5576c 0%, #ddd 0%);
+    }
+    .vid-progress::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 10px; height: 10px;
+      border-radius: 50%; background: #f5576c; cursor: pointer;
+    }
+    .vid-progress::-moz-range-thumb {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #f5576c; cursor: pointer; border: none;
+    }
+    .vid-btn-row {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .vid-play-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: .9rem; color: #555; padding: 0 2px;
+      line-height: 1; flex-shrink: 0;
+    }
+    .vid-play-btn:hover { color: #f5576c; }
     .vid-time-disp {
-      position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,.6); color: #fff; font-size: .58rem;
-      padding: 1px 6px; border-radius: 4px; pointer-events: none;
-      letter-spacing: .03em;
+      font-size: .62rem; color: #888; letter-spacing: .02em;
     }
 
     /* ── 구간 자막 섹션 ── */
@@ -188,7 +210,32 @@
     .tc-text-input {
       width: 100%; padding: 3px 5px;
       border: 1px solid #ddd; border-radius: 3px;
-      font-size: .7rem; resize: none; height: 30px;
+      font-size: .7rem; resize: none; height: 30px; margin-bottom: 3px;
+    }
+    .tc-style-row {
+      display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+      padding-top: 2px;
+    }
+    .tc-swatches { display: flex; gap: 2px; align-items: center; }
+    .tc-swatch {
+      width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #ddd;
+      cursor: pointer; padding: 0; flex-shrink: 0;
+    }
+    .tc-swatch.active { border-color: #f5576c; transform: scale(1.2); }
+    .tc-bc-swatch {
+      width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid #ddd;
+      cursor: pointer; padding: 0; flex-shrink: 0; font-size: .5rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tc-bc-swatch.active { border-color: #f5576c; transform: scale(1.2); }
+    .tc-font-size {
+      width: 38px; padding: 1px 3px;
+      border: 1px solid #ddd; border-radius: 3px;
+      font-size: .6rem; text-align: center;
+    }
+    .tc-color-picker, .tc-boxcolor-picker {
+      width: 16px; height: 16px; padding: 0; border: 1px solid #ddd;
+      border-radius: 3px; cursor: pointer;
     }
 
     /* ── 자막 미리보기 오버레이 ── */
@@ -277,10 +324,18 @@
     #preview-grid[data-format="square"] .preview-item {
       flex-direction: column;
     }
+    #preview-grid[data-format="landscape"] .preview-left,
+    #preview-grid[data-format="square"] .preview-left {
+      width: 100%; border-radius: 14px 14px 0 0;
+    }
     #preview-grid[data-format="landscape"] .preview-img-wrap,
     #preview-grid[data-format="square"] .preview-img-wrap {
       width: 100%;
       border-radius: 14px 14px 0 0;
+    }
+    #preview-grid[data-format="landscape"] .preview-left .preview-img-wrap,
+    #preview-grid[data-format="square"] .preview-left .preview-img-wrap {
+      border-radius: 0;
     }
     #preview-grid[data-format="landscape"] .preview-controls,
     #preview-grid[data-format="square"] .preview-controls {
@@ -1235,17 +1290,27 @@ function renderPreviews() {
     if (!timedCaptionsPerPhoto[i]) timedCaptionsPerPhoto[i] = [];
     const mediaTpl = isVid
       ? `<video src="${url}" muted playsinline preload="metadata"></video>
-         <div class="vid-play-overlay paused"><span class="vid-play-icon">▶</span><span class="vid-time-disp">0:00</span></div>
          <span class="video-badge">🎬 동영상</span>`
       : `<img src="${url}" alt="photo ${i+1}" />`;
 
     item.innerHTML = `
-      <div class="preview-img-wrap">
-        ${mediaTpl}
-        <span class="order-badge">${i+1}</span>
-        <button class="remove-photo-btn" title="삭제">×</button>
-        <div class="caption-overlay"></div>
-        <div class="sticker-layer"></div>
+      <div class="preview-left">
+        <div class="preview-img-wrap">
+          ${mediaTpl}
+          <span class="order-badge">${i+1}</span>
+          <button class="remove-photo-btn" title="삭제">×</button>
+          <div class="caption-overlay"></div>
+          <div class="sticker-layer"></div>
+        </div>
+        ${isVid ? `<div class="vid-controls-bar">
+          <div class="vid-progress-wrap">
+            <input type="range" class="vid-progress" min="0" max="100" step="0.1" value="0" />
+          </div>
+          <div class="vid-btn-row">
+            <button class="vid-play-btn" title="재생/정지">▶</button>
+            <span class="vid-time-disp">0:00 / 0:00</span>
+          </div>
+        </div>` : ''}
       </div>
       <div class="preview-controls">
         <textarea class="caption-input" placeholder="자막을 입력하세요 (선택사항)"></textarea>
@@ -1340,65 +1405,79 @@ function renderPreviews() {
     item.querySelector('.remove-photo-btn').addEventListener('click', () => removeFile(i));
     item.querySelector('.trans-select').addEventListener('change', () => { if (hasGenerated) scheduleRegen(); });
 
-    // ── 동영상 재생 컨트롤 ──
+    // ── 동영상 재생 컨트롤 (영상 아래 바) ──
     if (isVid) {
-      const vidEl   = item.querySelector('video');
-      const playOvl = item.querySelector('.vid-play-overlay');
-      const timDisp = item.querySelector('.vid-time-disp');
+      const vidEl      = item.querySelector('video');
+      const playBtn    = item.querySelector('.vid-play-btn');
+      const timDisp    = item.querySelector('.vid-time-disp');
+      const progressEl = item.querySelector('.vid-progress');
 
-      function togglePlay() {
-        if (vidEl.paused) { vidEl.play(); }
-        else { vidEl.pause(); }
-      }
-      playOvl.addEventListener('click', e => { e.stopPropagation(); togglePlay(); });
-      vidEl.addEventListener('play',  () => playOvl.classList.remove('paused'));
-      vidEl.addEventListener('pause', () => playOvl.classList.add('paused'));
-      vidEl.addEventListener('ended', () => { playOvl.classList.add('paused'); vidEl.currentTime = 0; });
+      const BC_CSS2 = {'none':'transparent','black@0.5':'rgba(0,0,0,.5)','white@0.6':'rgba(255,255,255,.6)','#1a1a2e@0.75':'rgba(26,26,46,.75)','#7b2d8b@0.65':'rgba(123,45,139,.65)'};
+
+      function togglePlay() { vidEl.paused ? vidEl.play() : vidEl.pause(); }
+
+      playBtn.addEventListener('click', () => togglePlay());
+
+      vidEl.addEventListener('play',  () => { playBtn.textContent = '⏸'; });
+      vidEl.addEventListener('pause', () => { playBtn.textContent = '▶'; });
+      vidEl.addEventListener('ended', () => { playBtn.textContent = '▶'; vidEl.currentTime = 0; });
+
+      vidEl.addEventListener('loadedmetadata', () => {
+        timDisp.textContent = '0:00 / ' + fmtTime(vidEl.duration);
+      });
 
       vidEl.addEventListener('timeupdate', () => {
-        const t = vidEl.currentTime;
-        timDisp.textContent = fmtTime(t);
+        const t   = vidEl.currentTime;
+        const dur = vidEl.duration || 0;
+        timDisp.textContent = fmtTime(t) + ' / ' + fmtTime(dur);
+        // 진행 바 업데이트
+        const pct = dur > 0 ? (t / dur) * 100 : 0;
+        progressEl.value = pct;
+        progressEl.style.background = `linear-gradient(to right,#f5576c ${pct}%,#ddd ${pct}%)`;
+
         // 구간 자막 오버레이 업데이트
         const entries = timedCaptionsPerPhoto[i] || [];
         if (entries.length > 0) {
           const active = entries.find(e => t >= e.start && t < e.end);
           const captionOverlay = item.querySelector('.caption-overlay');
-          const wrap = item.querySelector('.preview-img-wrap');
-          const captionInput = item.querySelector('.caption-input');
-          const activeSw = item.querySelector('.cswatch.active');
-          const colorPicker = item.querySelector('.caption-color-picker');
-          const fontSizeInput = item.querySelector('.font-size-input');
-          const activeBc = item.querySelector('.bcswatch.active');
-          const boxPicker = item.querySelector('.boxcolor-picker');
-          const BC_CSS2 = {'none':'transparent','black@0.5':'rgba(0,0,0,.5)','white@0.6':'rgba(255,255,255,.6)','#1a1a2e@0.75':'rgba(26,26,46,.75)','#7b2d8b@0.65':'rgba(123,45,139,.65)'};
-          const pos = captionPositions[i] || {x:.5, y:.88};
+          const captionInput   = item.querySelector('.caption-input');
+          const wrap           = item.querySelector('.preview-img-wrap');
+          const pos            = captionPositions[i] || {x:.5, y:.88};
           if (active) {
-            const color = activeSw ? activeSw.dataset.color : colorPicker.value;
-            const fontSize = parseInt(fontSizeInput.value) || 55;
-            const scale = wrap.offsetWidth / 1080;
+            const color    = active.color || 'white';
+            const fontSize = active.fontSize || 55;
+            const bcKey    = active.boxColor || 'black@0.5';
+            const scale    = wrap.offsetWidth / 1080;
             const dispSize = Math.max(7, Math.round(fontSize * scale));
-            const bcKey = activeBc ? activeBc.dataset.boxcolor : null;
-            const bgCSS = bcKey != null ? (BC_CSS2[bcKey] || 'rgba(0,0,0,.5)') : (boxPicker.value + 'aa');
-            captionOverlay.textContent = active.text;
-            captionOverlay.style.display = 'block';
-            captionOverlay.style.color = color;
-            captionOverlay.style.fontSize = dispSize + 'px';
-            captionOverlay.style.background = bgCSS;
-            captionOverlay.style.left = (pos.x * 100) + '%';
-            captionOverlay.style.top  = (pos.y * 100) + '%';
+            const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
+            captionOverlay.textContent       = active.text;
+            captionOverlay.style.display     = 'block';
+            captionOverlay.style.color       = color;
+            captionOverlay.style.fontSize    = dispSize + 'px';
+            captionOverlay.style.background  = bgCSS;
+            captionOverlay.style.left        = (pos.x * 100) + '%';
+            captionOverlay.style.top         = (pos.y * 100) + '%';
           } else if (!captionInput.value.trim()) {
             captionOverlay.style.display = 'none';
           }
         }
       });
 
+      progressEl.addEventListener('input', () => {
+        const dur = vidEl.duration || 0;
+        vidEl.currentTime = (progressEl.value / 100) * dur;
+      });
+
       // ── 구간 자막 ──
-      const tcList = item.querySelector('.timed-cap-list');
+      const tcList   = item.querySelector('.timed-cap-list');
       const addTcBtn = item.querySelector('.add-timed-cap-btn');
 
       function renderTimedCaptions() {
         tcList.innerHTML = '';
         (timedCaptionsPerPhoto[i] || []).forEach((tc, j) => {
+          const tcColor   = tc.color   || 'white';
+          const tcBox     = tc.boxColor|| 'black@0.5';
+          const tcSize    = tc.fontSize|| 55;
           const entry = document.createElement('div');
           entry.className = 'timed-cap-entry';
           entry.innerHTML = `
@@ -1407,12 +1486,37 @@ function renderPreviews() {
               <input type="number" class="tc-time-input tc-start" min="0" step="0.1" value="${tc.start.toFixed(1)}" />
               <span class="tc-time-label">끝</span>
               <input type="number" class="tc-time-input tc-end" min="0" step="0.1" value="${tc.end.toFixed(1)}" />
-              <button class="tc-set-btn tc-set-start" title="현재 재생 위치를 시작으로">◂현재</button>
-              <button class="tc-set-btn tc-set-end" title="현재 재생 위치를 끝으로">끝▸</button>
+              <button class="tc-set-btn tc-set-start" title="현재 위치를 시작으로">◂</button>
+              <button class="tc-set-btn tc-set-end" title="현재 위치를 끝으로">▸</button>
               <button class="tc-del-btn">✕</button>
             </div>
             <textarea class="tc-text-input" placeholder="자막 텍스트">${tc.text}</textarea>
+            <div class="tc-style-row">
+              <span class="tc-time-label">색</span>
+              <div class="tc-swatches">
+                <button class="tc-swatch${tcColor==='white'?' active':''}" data-color="white" style="background:#fff" title="흰색"></button>
+                <button class="tc-swatch${tcColor==='yellow'?' active':''}" data-color="yellow" style="background:#FFD700" title="노란색"></button>
+                <button class="tc-swatch${tcColor==='#FF6B6B'?' active':''}" data-color="#FF6B6B" style="background:#FF6B6B" title="빨간색"></button>
+                <button class="tc-swatch${tcColor==='#4ECDC4'?' active':''}" data-color="#4ECDC4" style="background:#4ECDC4" title="민트"></button>
+                <button class="tc-swatch${tcColor==='black'?' active':''}" data-color="black" style="background:#111" title="검정"></button>
+                <input type="color" class="tc-color-picker" value="${tcColor.startsWith('#')?tcColor:'#ffffff'}" />
+              </div>
+              <span class="tc-time-label">크기</span>
+              <input type="number" class="tc-font-size" value="${tcSize}" min="20" max="120" step="5" />
+            </div>
+            <div class="tc-style-row">
+              <span class="tc-time-label">배경</span>
+              <div class="tc-swatches">
+                <button class="tc-bc-swatch${tcBox==='none'?' active':''}" data-bc="none" style="background:transparent;border:1px solid #ccc" title="없음">✕</button>
+                <button class="tc-bc-swatch${tcBox==='black@0.5'?' active':''}" data-bc="black@0.5" style="background:rgba(0,0,0,.5)"></button>
+                <button class="tc-bc-swatch${tcBox==='white@0.6'?' active':''}" data-bc="white@0.6" style="background:rgba(255,255,255,.6);border:1px solid #ddd"></button>
+                <button class="tc-bc-swatch${tcBox==='#1a1a2e@0.75'?' active':''}" data-bc="#1a1a2e@0.75" style="background:rgba(26,26,46,.75)"></button>
+                <button class="tc-bc-swatch${tcBox==='#7b2d8b@0.65'?' active':''}" data-bc="#7b2d8b@0.65" style="background:rgba(123,45,139,.65)"></button>
+                <input type="color" class="tc-boxcolor-picker" value="#000000" />
+              </div>
+            </div>
           `;
+          // 시간 입력
           entry.querySelector('.tc-start').addEventListener('input', e => {
             timedCaptionsPerPhoto[i][j].start = parseFloat(e.target.value) || 0;
             if (hasGenerated) scheduleRegen();
@@ -1426,13 +1530,15 @@ function renderPreviews() {
             if (hasGenerated) scheduleRegen();
           });
           entry.querySelector('.tc-set-start').addEventListener('click', () => {
-            timedCaptionsPerPhoto[i][j].start = parseFloat(vidEl.currentTime.toFixed(1));
-            entry.querySelector('.tc-start').value = timedCaptionsPerPhoto[i][j].start.toFixed(1);
+            const v = parseFloat(vidEl.currentTime.toFixed(1));
+            timedCaptionsPerPhoto[i][j].start = v;
+            entry.querySelector('.tc-start').value = v.toFixed(1);
             if (hasGenerated) scheduleRegen();
           });
           entry.querySelector('.tc-set-end').addEventListener('click', () => {
-            timedCaptionsPerPhoto[i][j].end = parseFloat(vidEl.currentTime.toFixed(1));
-            entry.querySelector('.tc-end').value = timedCaptionsPerPhoto[i][j].end.toFixed(1);
+            const v = parseFloat(vidEl.currentTime.toFixed(1));
+            timedCaptionsPerPhoto[i][j].end = v;
+            entry.querySelector('.tc-end').value = v.toFixed(1);
             if (hasGenerated) scheduleRegen();
           });
           entry.querySelector('.tc-del-btn').addEventListener('click', () => {
@@ -1440,15 +1546,52 @@ function renderPreviews() {
             renderTimedCaptions();
             if (hasGenerated) scheduleRegen();
           });
+          // 글자 색상 스와치
+          entry.querySelectorAll('.tc-swatch').forEach(sw => {
+            sw.addEventListener('click', () => {
+              entry.querySelectorAll('.tc-swatch').forEach(s => s.classList.remove('active'));
+              sw.classList.add('active');
+              timedCaptionsPerPhoto[i][j].color = sw.dataset.color;
+              if (hasGenerated) scheduleRegen();
+            });
+          });
+          entry.querySelector('.tc-color-picker').addEventListener('input', e => {
+            entry.querySelectorAll('.tc-swatch').forEach(s => s.classList.remove('active'));
+            timedCaptionsPerPhoto[i][j].color = e.target.value;
+            if (hasGenerated) scheduleRegen();
+          });
+          // 글자 크기
+          entry.querySelector('.tc-font-size').addEventListener('input', e => {
+            timedCaptionsPerPhoto[i][j].fontSize = parseInt(e.target.value) || 55;
+            if (hasGenerated) scheduleRegen();
+          });
+          // 배경색 스와치
+          entry.querySelectorAll('.tc-bc-swatch').forEach(sw => {
+            sw.addEventListener('click', () => {
+              entry.querySelectorAll('.tc-bc-swatch').forEach(s => s.classList.remove('active'));
+              sw.classList.add('active');
+              timedCaptionsPerPhoto[i][j].boxColor = sw.dataset.bc;
+              if (hasGenerated) scheduleRegen();
+            });
+          });
+          entry.querySelector('.tc-boxcolor-picker').addEventListener('input', e => {
+            entry.querySelectorAll('.tc-bc-swatch').forEach(s => s.classList.remove('active'));
+            timedCaptionsPerPhoto[i][j].boxColor = e.target.value + '@0.7';
+            if (hasGenerated) scheduleRegen();
+          });
           tcList.appendChild(entry);
         });
       }
 
       addTcBtn.addEventListener('click', () => {
-        const dur = vidEl.duration || 0;
+        const dur      = vidEl.duration || 0;
         const existing = timedCaptionsPerPhoto[i] || [];
-        const lastEnd = existing.length > 0 ? existing[existing.length - 1].end : 0;
-        timedCaptionsPerPhoto[i].push({ text: '', start: parseFloat(lastEnd.toFixed(1)), end: parseFloat(Math.min(lastEnd + 3, dur).toFixed(1)) });
+        const lastEnd  = existing.length > 0 ? existing[existing.length - 1].end : 0;
+        timedCaptionsPerPhoto[i].push({
+          text: '', start: parseFloat(lastEnd.toFixed(1)),
+          end: parseFloat(Math.min(lastEnd + 3, dur).toFixed(1)),
+          color: 'white', boxColor: 'black@0.5', fontSize: 55,
+        });
         renderTimedCaptions();
       });
 
