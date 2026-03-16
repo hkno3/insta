@@ -287,12 +287,26 @@
       white-space: pre; transform: translateX(-50%);
     }
     .tc-active-overlay.dragging { cursor: grabbing; }
-    @keyframes tcFadeIn   { from{opacity:0} to{opacity:1} }
-    @keyframes tcSlideUp  { from{opacity:0;transform:translateX(-50%) translateY(var(--tc-slide-y,12px))} to{opacity:1;transform:translateX(-50%) translateY(0)} }
-    @keyframes tcSlideDown{ from{opacity:0;transform:translateX(-50%) translateY(calc(-1*var(--tc-slide-y,12px)))} to{opacity:1;transform:translateX(-50%) translateY(0)} }
-    .tc-eff-fade    { animation: tcFadeIn   var(--tc-anim-dur,.35s) ease forwards; }
-    .tc-eff-slideup { animation: tcSlideUp  var(--tc-anim-dur,.35s) ease forwards; }
-    .tc-eff-slidedn { animation: tcSlideDown var(--tc-anim-dur,.35s) ease forwards; }
+    @keyframes tcFadeIn    { from{opacity:0} to{opacity:1} }
+    @keyframes tcSlideUp   { from{opacity:0;transform:translateX(-50%) translateY(var(--tc-slide-y,30px))} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+    @keyframes tcSlideDown { from{opacity:0;transform:translateX(-50%) translateY(calc(-1*var(--tc-slide-y,30px)))} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+    @keyframes tcSlideLeft { from{opacity:0;transform:translateX(calc(-50% - var(--tc-slide-y,60px)))} to{opacity:1;transform:translateX(-50%)} }
+    @keyframes tcSlideRight{ from{opacity:0;transform:translateX(calc(-50% + var(--tc-slide-y,60px)))} to{opacity:1;transform:translateX(-50%)} }
+    @keyframes tcZoomIn    { from{opacity:0;transform:translateX(-50%) scale(0.2)} to{opacity:1;transform:translateX(-50%) scale(1)} }
+    @keyframes tcZoomOut   { from{opacity:0;transform:translateX(-50%) scale(2.0)} to{opacity:1;transform:translateX(-50%) scale(1)} }
+    @keyframes tcPop       { 0%{opacity:0;transform:translateX(-50%) scale(0.3)} 70%{opacity:1;transform:translateX(-50%) scale(1.2)} 100%{opacity:1;transform:translateX(-50%) scale(1)} }
+    @keyframes tcBlink     { 0%,49%,100%{opacity:1} 50%,99%{opacity:0} }
+    @keyframes tcRoll      { from{opacity:0;transform:translateX(-50%) rotate(-10deg) scale(0.5)} to{opacity:1;transform:translateX(-50%) rotate(0) scale(1)} }
+    .tc-eff-fade       { animation: tcFadeIn    var(--tc-anim-dur,1s) ease forwards; }
+    .tc-eff-slideup    { animation: tcSlideUp   var(--tc-anim-dur,1s) ease forwards; }
+    .tc-eff-slidedn    { animation: tcSlideDown var(--tc-anim-dur,1s) ease forwards; }
+    .tc-eff-slideleft  { animation: tcSlideLeft var(--tc-anim-dur,1s) ease forwards; }
+    .tc-eff-slideright { animation: tcSlideRight var(--tc-anim-dur,1s) ease forwards; }
+    .tc-eff-zoomin     { animation: tcZoomIn    var(--tc-anim-dur,1s) ease forwards; }
+    .tc-eff-zoomout    { animation: tcZoomOut   var(--tc-anim-dur,1s) ease forwards; }
+    .tc-eff-pop        { animation: tcPop       var(--tc-anim-dur,1s) cubic-bezier(.34,1.56,.64,1) forwards; }
+    .tc-eff-blink      { animation: tcBlink     var(--tc-anim-dur,1s) step-end infinite; }
+    .tc-eff-roll       { animation: tcRoll      var(--tc-anim-dur,1s) ease forwards; }
 
     /* ── 스티커 오버레이 ── */
     .sticker-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
@@ -1205,6 +1219,17 @@ function refreshStickerLayer(item, photoIdx) {
 function handleMove(cx, cy) {
   if (!interaction) return;
   const { type, photoIdx, W, H } = interaction;
+  if (type === 'tc-caption') {
+    const dx = cx - interaction.startMx, dy = cy - interaction.startMy;
+    const tc = (timedCaptionsPerPhoto[photoIdx] || [])[interaction.tcIdx];
+    if (tc) {
+      tc.x = Math.max(0.02, Math.min(0.98, interaction.origX + dx / W));
+      tc.y = Math.max(0.02, Math.min(0.98, interaction.origY + dy / H));
+      interaction.overlay.style.left = (tc.x * 100) + '%';
+      interaction.overlay.style.top  = (tc.y * 100) + '%';
+    }
+    return;
+  }
   if (type === 'caption') {
     const dx = cx - interaction.startMx, dy = cy - interaction.startMy;
     const pos = captionPositions[photoIdx];
@@ -1215,7 +1240,6 @@ function handleMove(cx, cy) {
     if (thisItem) {
       const co = thisItem.querySelector('.caption-overlay');
       if (co) { co.style.left = lx; co.style.top = ly; }
-      thisItem.querySelectorAll('.tc-active-overlay').forEach(el => { el.style.left = lx; el.style.top = ly; });
     }
     return;
   }
@@ -1235,12 +1259,8 @@ function handleMove(cx, cy) {
 }
 function handleEnd() {
   if (!interaction) return;
-  if (interaction.type === 'caption') {
-    const thisItem = previewGrid.querySelectorAll('.preview-item')[interaction.photoIdx];
-    if (thisItem) {
-      thisItem.querySelector('.caption-overlay')?.classList.remove('dragging');
-      thisItem.querySelectorAll('.tc-active-overlay').forEach(el => el.classList.remove('dragging'));
-    }
+  if (interaction.type === 'tc-caption' || interaction.type === 'caption') {
+    interaction.overlay?.classList.remove('dragging');
   } else {
     interaction.node.classList.remove('active');
   }
@@ -1521,7 +1541,6 @@ function renderPreviews() {
         );
         const prevActive = vidEl._prevActives || new Set();
         const scale = wrap.offsetWidth / 1080;
-        const pos   = captionPositions[i] || {x:.5, y:.88};
         // 더 이상 활성화되지 않은 오버레이 제거
         wrap.querySelectorAll('.tc-active-overlay').forEach(el => {
           if (!newActive.has(+el.dataset.tcIdx)) el.remove();
@@ -1534,7 +1553,10 @@ function renderPreviews() {
           const bcKey    = active.boxColor || 'black@0.5';
           const dispSize = Math.max(7, Math.round(fontSize * scale));
           const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
-          const lx = (pos.x * 100) + '%', ly = (pos.y * 100) + '%';
+          // 각 자막 고유 위치 사용
+          const tcX = active.x !== undefined ? active.x : 0.5;
+          const tcY = active.y !== undefined ? active.y : 0.82;
+          const lx = (tcX * 100) + '%', ly = (tcY * 100) + '%';
           if (prevActive.has(j)) {
             // 이미 표시 중 – 위치만 갱신 (애니메이션 재시작 없음)
             const existing = wrap.querySelector(`.tc-active-overlay[data-tc-idx="${j}"]`);
@@ -1546,11 +1568,15 @@ function renderPreviews() {
           ov.className = 'tc-active-overlay';
           ov.dataset.tcIdx = j;
           const eff    = active.effect         || 'none';
-          const dur    = (active.effectDuration || 1.0)  + 's';
-          const slideY = (active.slideRange     || 12)   + 'px';
-          if (eff === 'fade')         ov.classList.add('tc-eff-fade');
-          else if (eff === 'slideup') ov.classList.add('tc-eff-slideup');
-          else if (eff === 'slidedn') ov.classList.add('tc-eff-slidedn');
+          const dur    = (active.effectDuration || 1.0) + 's';
+          const slideY = (active.slideRange     || 30)  + 'px';
+          const effMap = {
+            fade:'tc-eff-fade', slideup:'tc-eff-slideup', slidedn:'tc-eff-slidedn',
+            slideleft:'tc-eff-slideleft', slideright:'tc-eff-slideright',
+            zoomin:'tc-eff-zoomin', zoomout:'tc-eff-zoomout',
+            pop:'tc-eff-pop', blink:'tc-eff-blink', roll:'tc-eff-roll',
+          };
+          if (effMap[eff]) ov.classList.add(effMap[eff]);
           ov.style.setProperty('--tc-anim-dur', dur);
           ov.style.setProperty('--tc-slide-y',  slideY);
           ov.textContent      = active.text;
@@ -1559,22 +1585,17 @@ function renderPreviews() {
           ov.style.background = bgCSS;
           ov.style.left       = lx;
           ov.style.top        = ly;
-          ov.addEventListener('mousedown', e => {
-            e.preventDefault(); e.stopPropagation();
-            const p = captionPositions[i];
+          const startDrag = (clientX, clientY) => {
+            const tc = timedCaptionsPerPhoto[i][j];
             ov.classList.add('dragging');
-            interaction = { type:'caption', photoIdx:i, overlay:ov,
-              startMx:e.clientX, startMy:e.clientY, origX:p.x, origY:p.y,
+            interaction = { type:'tc-caption', photoIdx:i, tcIdx:j, overlay:ov,
+              startMx:clientX, startMy:clientY,
+              origX: tc.x !== undefined ? tc.x : 0.5,
+              origY: tc.y !== undefined ? tc.y : 0.82,
               W:wrap.offsetWidth, H:wrap.offsetHeight };
-          });
-          ov.addEventListener('touchstart', e => {
-            e.preventDefault(); e.stopPropagation();
-            const p = captionPositions[i];
-            ov.classList.add('dragging');
-            interaction = { type:'caption', photoIdx:i, overlay:ov,
-              startMx:e.touches[0].clientX, startMy:e.touches[0].clientY, origX:p.x, origY:p.y,
-              W:wrap.offsetWidth, H:wrap.offsetHeight };
-          }, {passive:false});
+          };
+          ov.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); startDrag(e.clientX, e.clientY); });
+          ov.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); startDrag(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
           wrap.appendChild(ov);
         });
         vidEl._prevActives = newActive;
@@ -1604,9 +1625,10 @@ function renderPreviews() {
           const entry = document.createElement('div');
           entry.className = 'timed-cap-entry';
           const tcEff       = tc.effect         || 'none';
-          const tcEffDur    = tc.effectDuration !== undefined ? tc.effectDuration : 0.35;
-          const tcSlideRng  = tc.slideRange     !== undefined ? tc.slideRange     : 12;
-          const showSlide   = (tcEff === 'slideup' || tcEff === 'slidedn');
+          const tcEffDur    = tc.effectDuration !== undefined ? tc.effectDuration : 1.0;
+          const tcSlideRng  = tc.slideRange     !== undefined ? tc.slideRange     : 30;
+          const SLIDE_EFFS  = ['slideup','slidedn','slideleft','slideright'];
+          const showSlide   = SLIDE_EFFS.includes(tcEff);
           entry.innerHTML = `
             <div class="tc-times-row">
               <span class="tc-time-label">시작</span>
@@ -1626,6 +1648,13 @@ function renderPreviews() {
                 <option value="fade"${tcEff==='fade'?' selected':''}>페이드</option>
                 <option value="slideup"${tcEff==='slideup'?' selected':''}>슬라이드업</option>
                 <option value="slidedn"${tcEff==='slidedn'?' selected':''}>슬라이드다운</option>
+                <option value="slideleft"${tcEff==='slideleft'?' selected':''}>왼쪽슬라이드</option>
+                <option value="slideright"${tcEff==='slideright'?' selected':''}>오른쪽슬라이드</option>
+                <option value="zoomin"${tcEff==='zoomin'?' selected':''}>줌인</option>
+                <option value="zoomout"${tcEff==='zoomout'?' selected':''}>줌아웃</option>
+                <option value="pop"${tcEff==='pop'?' selected':''}>팝</option>
+                <option value="blink"${tcEff==='blink'?' selected':''}>깜빡임</option>
+                <option value="roll"${tcEff==='roll'?' selected':''}>롤인</option>
               </select>
               <span class="tc-time-label" style="margin-left:6px">속도</span>
               <input type="number" class="tc-eff-dur" min="0.5" max="5.0" step="0.5" value="${tcEffDur}" title="효과 지속 시간(초)" />
@@ -1730,9 +1759,10 @@ function renderPreviews() {
           const toggleSlideVis = (show) => {
             [slideLabel, slideRngIn, slideUnit].forEach(el => el.style.display = show ? '' : 'none');
           };
+          const SLIDE_EFFS_L = ['slideup','slidedn','slideleft','slideright'];
           effSel.addEventListener('change', e => {
             timedCaptionsPerPhoto[i][j].effect = e.target.value;
-            toggleSlideVis(e.target.value === 'slideup' || e.target.value === 'slidedn');
+            toggleSlideVis(SLIDE_EFFS_L.includes(e.target.value));
             if (hasGenerated) scheduleRegen();
           });
           effDurIn.addEventListener('input', e => {
@@ -1751,11 +1781,13 @@ function renderPreviews() {
         const dur      = vidEl.duration || 0;
         const existing = timedCaptionsPerPhoto[i] || [];
         const lastEnd  = existing.length > 0 ? existing[existing.length - 1].end : 0;
+        const existingLen = (timedCaptionsPerPhoto[i] || []).length;
         timedCaptionsPerPhoto[i].push({
           text: '', start: parseFloat(lastEnd.toFixed(1)),
           end: parseFloat(Math.min(lastEnd + 3, dur).toFixed(1)),
           color: 'white', boxColor: 'black@0.5', fontSize: 55,
           effect: 'none', effectDuration: 1.0, slideRange: 30,
+          x: 0.5, y: Math.max(0.1, 0.82 - existingLen * 0.1),
         });
         renderTimedCaptions();
       });
