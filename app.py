@@ -791,27 +791,36 @@ def create_video():
     # 효과음 + 사진별 배경음 수집
     sfx_list         = []
     photo_music_list = []
-    sfx_keys = [k for k in request.files if k.startswith('sfx_')]
     pm_keys  = [k for k in request.files if k.startswith('photo_music_')]
 
     start_times = compute_sfx_start_times(prepared, duration, transitions, photo_durations)
 
-    if sfx_keys or pm_keys:
-        for key in sfx_keys:
-            try:
-                photo_idx = int(key.split('_', 1)[1])
-            except ValueError:
-                continue
-            f = request.files[key]
-            if not f.filename or photo_idx >= len(prepared):
-                continue
-            ext = f.filename.rsplit('.', 1)[-1].lower()
-            if ext in AUDIO_EXTENSIONS:
-                sfx_path = job_dir / f'{key}.{ext}'
-                f.save(sfx_path)
-                t = start_times[photo_idx] if photo_idx < len(start_times) else 0.0
-                sfx_list.append((sfx_path, t))
+    # 멀티 효과음: sfx_timestamps JSON + sfx_{photo_idx}_{entry_idx} 파일
+    sfx_timestamps_json = request.form.get('sfx_timestamps', '[]')
+    try:
+        sfx_timestamps = json.loads(sfx_timestamps_json)
+        if not isinstance(sfx_timestamps, list):
+            sfx_timestamps = []
+    except Exception:
+        sfx_timestamps = []
 
+    for entry in sfx_timestamps:
+        try:
+            photo_idx, entry_idx, offset_sec = int(entry[0]), int(entry[1]), float(entry[2])
+        except (IndexError, ValueError, TypeError):
+            continue
+        key = f'sfx_{photo_idx}_{entry_idx}'
+        f = request.files.get(key)
+        if not f or not f.filename or photo_idx >= len(prepared):
+            continue
+        ext = f.filename.rsplit('.', 1)[-1].lower()
+        if ext in AUDIO_EXTENSIONS:
+            sfx_path = job_dir / f'{key}.{ext}'
+            f.save(sfx_path)
+            clip_start = start_times[photo_idx] if photo_idx < len(start_times) else 0.0
+            sfx_list.append((sfx_path, clip_start + offset_sec))
+
+    if pm_keys:
         for key in pm_keys:
             try:
                 photo_idx = int(key.split('_')[-1])
