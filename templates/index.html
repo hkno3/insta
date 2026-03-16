@@ -261,6 +261,10 @@
       font-size: .6rem; padding: 1px 3px; border: 1px solid #ddd;
       border-radius: 3px; background: #fff;
     }
+    .tc-eff-dur, .tc-slide-range {
+      width: 38px; padding: 1px 3px; border: 1px solid #ddd;
+      border-radius: 3px; font-size: .6rem; text-align: center;
+    }
 
     /* ── 자막 미리보기 오버레이 ── */
     .caption-overlay {
@@ -1116,6 +1120,7 @@ let isGenerating       = false;
 
 /* ── 드래그/리사이즈 상태 ── */
 let interaction = null;
+let activeVidEl = null;  // 가장 최근 활성화된 영상
 
 /* ── 스티커 DOM 배치 ── */
 function applyToNode(node, s, W, H) {
@@ -1246,6 +1251,31 @@ document.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
 document.addEventListener('mouseup', handleEnd);
 document.addEventListener('touchmove', e => { if (!interaction) return; e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
 document.addEventListener('touchend', handleEnd);
+
+/* ── 키보드 단축키 (방향키) ── */
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  const vid = activeVidEl || document.querySelector('.preview-img-wrap video');
+  if (!vid) return;
+  switch (e.key) {
+    case 'ArrowLeft':
+      e.preventDefault();
+      vid.currentTime = Math.max(0, vid.currentTime - 5);
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      vid.currentTime = Math.min(vid.duration || 0, vid.currentTime + 5);
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      vid.volume = Math.min(1, parseFloat((vid.volume + 0.1).toFixed(1)));
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      vid.volume = Math.max(0, parseFloat((vid.volume - 0.1).toFixed(1)));
+      break;
+  }
+});
 
 /* ── 스티커 추가 헬퍼 ── */
 const CENTER_OFFSETS = [
@@ -1454,9 +1484,9 @@ function renderPreviews() {
 
       function togglePlay() { vidEl.paused ? vidEl.play() : vidEl.pause(); }
 
-      playBtn.addEventListener('click', () => togglePlay());
+      playBtn.addEventListener('click', () => { activeVidEl = vidEl; togglePlay(); });
 
-      vidEl.addEventListener('play',  () => { playBtn.textContent = '⏸'; });
+      vidEl.addEventListener('play',  () => { activeVidEl = vidEl; playBtn.textContent = '⏸'; });
       vidEl.addEventListener('pause', () => { playBtn.textContent = '▶'; });
       vidEl.addEventListener('ended', () => { playBtn.textContent = '▶'; vidEl.currentTime = 0; });
 
@@ -1483,59 +1513,78 @@ function renderPreviews() {
         });
         vidEl._prevT = t;
 
-        // 구간 자막 오버레이 업데이트 (여러 개 동시 표시)
+        // 구간 자막 오버레이 업데이트 (여러 개 동시 표시, 애니메이션 재시작 방지)
         const wrap = item.querySelector('.preview-img-wrap');
-        const isDraggingCaption = interaction && interaction.type === 'caption' && interaction.photoIdx === i;
-        if (!isDraggingCaption) {
-          wrap.querySelectorAll('.tc-active-overlay').forEach(el => el.remove());
-          const entries  = timedCaptionsPerPhoto[i] || [];
-          const actives  = entries.filter(e => t >= e.start && t < e.end);
-          const scale    = wrap.offsetWidth / 1080;
-          const pos      = captionPositions[i] || {x:.5, y:.88};
-          actives.forEach(active => {
-            const color    = active.color    || 'white';
-            const fontSize = active.fontSize || 55;
-            const bcKey    = active.boxColor || 'black@0.5';
-            const dispSize = Math.max(7, Math.round(fontSize * scale));
-            const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
-            const ov = document.createElement('div');
-            ov.className = 'tc-active-overlay';
-            const eff      = active.effect         || 'none';
-            const dur      = (active.effectDuration || 0.35) + 's';
-            const slideY   = (active.slideRange     || 12)   + 'px';
-            if (eff === 'fade')    ov.classList.add('tc-eff-fade');
-            else if (eff === 'slideup') ov.classList.add('tc-eff-slideup');
-            else if (eff === 'slidedn') ov.classList.add('tc-eff-slidedn');
-            ov.style.setProperty('--tc-anim-dur', dur);
-            ov.style.setProperty('--tc-slide-y', slideY);
-            ov.textContent      = active.text;
-            ov.style.color      = color;
-            ov.style.fontSize   = dispSize + 'px';
-            ov.style.background = bgCSS;
-            ov.style.left       = (pos.x * 100) + '%';
-            ov.style.top        = (pos.y * 100) + '%';
-            ov.addEventListener('mousedown', e => {
-              e.preventDefault(); e.stopPropagation();
-              const p = captionPositions[i];
-              ov.classList.add('dragging');
-              interaction = { type:'caption', photoIdx:i, overlay:ov,
-                startMx:e.clientX, startMy:e.clientY, origX:p.x, origY:p.y,
-                W:wrap.offsetWidth, H:wrap.offsetHeight };
-            });
-            ov.addEventListener('touchstart', e => {
-              e.preventDefault(); e.stopPropagation();
-              const p = captionPositions[i];
-              ov.classList.add('dragging');
-              interaction = { type:'caption', photoIdx:i, overlay:ov,
-                startMx:e.touches[0].clientX, startMy:e.touches[0].clientY, origX:p.x, origY:p.y,
-                W:wrap.offsetWidth, H:wrap.offsetHeight };
-            }, {passive:false});
-            wrap.appendChild(ov);
+        const entries   = timedCaptionsPerPhoto[i] || [];
+        const newActive = new Set(
+          entries.map((e, j) => (t >= e.start && t < e.end) ? j : -1).filter(j => j >= 0)
+        );
+        const prevActive = vidEl._prevActives || new Set();
+        const scale = wrap.offsetWidth / 1080;
+        const pos   = captionPositions[i] || {x:.5, y:.88};
+        // 더 이상 활성화되지 않은 오버레이 제거
+        wrap.querySelectorAll('.tc-active-overlay').forEach(el => {
+          if (!newActive.has(+el.dataset.tcIdx)) el.remove();
+        });
+        // 새로 활성화된 자막 추가 / 기존 자막 위치만 업데이트
+        newActive.forEach(j => {
+          const active   = entries[j];
+          const color    = active.color    || 'white';
+          const fontSize = active.fontSize || 55;
+          const bcKey    = active.boxColor || 'black@0.5';
+          const dispSize = Math.max(7, Math.round(fontSize * scale));
+          const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
+          const lx = (pos.x * 100) + '%', ly = (pos.y * 100) + '%';
+          if (prevActive.has(j)) {
+            // 이미 표시 중 – 위치만 갱신 (애니메이션 재시작 없음)
+            const existing = wrap.querySelector(`.tc-active-overlay[data-tc-idx="${j}"]`);
+            if (existing) { existing.style.left = lx; existing.style.top = ly; }
+            return;
+          }
+          // 새 오버레이 생성
+          const ov = document.createElement('div');
+          ov.className = 'tc-active-overlay';
+          ov.dataset.tcIdx = j;
+          const eff    = active.effect         || 'none';
+          const dur    = (active.effectDuration || 1.0)  + 's';
+          const slideY = (active.slideRange     || 12)   + 'px';
+          if (eff === 'fade')         ov.classList.add('tc-eff-fade');
+          else if (eff === 'slideup') ov.classList.add('tc-eff-slideup');
+          else if (eff === 'slidedn') ov.classList.add('tc-eff-slidedn');
+          ov.style.setProperty('--tc-anim-dur', dur);
+          ov.style.setProperty('--tc-slide-y',  slideY);
+          ov.textContent      = active.text;
+          ov.style.color      = color;
+          ov.style.fontSize   = dispSize + 'px';
+          ov.style.background = bgCSS;
+          ov.style.left       = lx;
+          ov.style.top        = ly;
+          ov.addEventListener('mousedown', e => {
+            e.preventDefault(); e.stopPropagation();
+            const p = captionPositions[i];
+            ov.classList.add('dragging');
+            interaction = { type:'caption', photoIdx:i, overlay:ov,
+              startMx:e.clientX, startMy:e.clientY, origX:p.x, origY:p.y,
+              W:wrap.offsetWidth, H:wrap.offsetHeight };
           });
-        }
+          ov.addEventListener('touchstart', e => {
+            e.preventDefault(); e.stopPropagation();
+            const p = captionPositions[i];
+            ov.classList.add('dragging');
+            interaction = { type:'caption', photoIdx:i, overlay:ov,
+              startMx:e.touches[0].clientX, startMy:e.touches[0].clientY, origX:p.x, origY:p.y,
+              W:wrap.offsetWidth, H:wrap.offsetHeight };
+          }, {passive:false});
+          wrap.appendChild(ov);
+        });
+        vidEl._prevActives = newActive;
       });
 
-      vidEl.addEventListener('seeked', () => { vidEl._prevT = vidEl.currentTime; });
+      vidEl.addEventListener('seeked', () => {
+        vidEl._prevT = vidEl.currentTime;
+        vidEl._prevActives = new Set(); // 시크 후 자막 애니메이션 재시작
+        item.querySelector('.preview-img-wrap').querySelectorAll('.tc-active-overlay').forEach(el => el.remove());
+      });
 
       progressEl.addEventListener('input', () => {
         const dur = vidEl.duration || 0;
@@ -1579,10 +1628,10 @@ function renderPreviews() {
                 <option value="slidedn"${tcEff==='slidedn'?' selected':''}>슬라이드다운</option>
               </select>
               <span class="tc-time-label" style="margin-left:6px">속도</span>
-              <input type="number" class="tc-font-size tc-eff-dur" min="0.1" max="3.0" step="0.1" value="${tcEffDur}" title="효과 지속 시간(초)" />
+              <input type="number" class="tc-eff-dur" min="0.5" max="5.0" step="0.5" value="${tcEffDur}" title="효과 지속 시간(초)" />
               <span class="tc-time-label">초</span>
               <span class="tc-slide-range-label tc-time-label" style="margin-left:6px${showSlide?'':';display:none'}">범위</span>
-              <input type="number" class="tc-font-size tc-slide-range" min="5" max="200" step="5" value="${tcSlideRng}" title="슬라이드 거리(px)" style="${showSlide?'':'display:none'}" />
+              <input type="number" class="tc-slide-range" min="5" max="200" step="5" value="${tcSlideRng}" title="슬라이드 거리(px)" style="${showSlide?'':'display:none'}" />
               <span class="tc-slide-range-unit tc-time-label" style="${showSlide?'':'display:none'}">px</span>
             </div>
             <textarea class="tc-text-input" placeholder="자막 텍스트">${tc.text}</textarea>
@@ -1654,7 +1703,7 @@ function renderPreviews() {
             if (hasGenerated) scheduleRegen();
           });
           // 글자 크기
-          entry.querySelector('.tc-font-size').addEventListener('input', e => {
+          entry.querySelector('input.tc-font-size').addEventListener('input', e => {
             timedCaptionsPerPhoto[i][j].fontSize = parseInt(e.target.value) || 55;
             if (hasGenerated) scheduleRegen();
           });
@@ -1706,7 +1755,7 @@ function renderPreviews() {
           text: '', start: parseFloat(lastEnd.toFixed(1)),
           end: parseFloat(Math.min(lastEnd + 3, dur).toFixed(1)),
           color: 'white', boxColor: 'black@0.5', fontSize: 55,
-          effect: 'none', effectDuration: 0.35, slideRange: 12,
+          effect: 'none', effectDuration: 1.0, slideRange: 30,
         });
         renderTimedCaptions();
       });
