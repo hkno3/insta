@@ -175,8 +175,8 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         f"text='{escaped}':"
         f"fontcolor={fc}:"
         f"fontsize={font_size}:"
-        f"x={x_expr}:"
-        f"y={y_expr}:"
+        f"x='{x_expr}':"
+        f"y='{y_expr}':"
         f"{box_part}{extra}"
     )
 
