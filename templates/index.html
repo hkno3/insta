@@ -257,6 +257,10 @@
       width: 16px; height: 16px; padding: 0; border: 1px solid #ddd;
       border-radius: 3px; cursor: pointer;
     }
+    .tc-effect {
+      font-size: .6rem; padding: 1px 3px; border: 1px solid #ddd;
+      border-radius: 3px; background: #fff;
+    }
 
     /* ── 자막 미리보기 오버레이 ── */
     .caption-overlay {
@@ -271,6 +275,19 @@
       white-space: pre; user-select: none;
     }
     .caption-overlay.dragging { cursor: grabbing; }
+    /* 구간 자막 오버레이 (여러 개 동시 표시) */
+    .tc-active-overlay {
+      position: absolute; text-align: center; max-width: 90%;
+      padding: 2px 5px; font-weight: 700; line-height: 1.3;
+      pointer-events: none; z-index: 7;
+      white-space: pre; transform: translateX(-50%);
+    }
+    @keyframes tcFadeIn   { from{opacity:0} to{opacity:1} }
+    @keyframes tcSlideUp  { from{opacity:0;transform:translateX(-50%) translateY(12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+    @keyframes tcSlideDown{ from{opacity:0;transform:translateX(-50%) translateY(-12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+    .tc-eff-fade    { animation: tcFadeIn  0.35s ease forwards; }
+    .tc-eff-slideup { animation: tcSlideUp 0.35s ease forwards; }
+    .tc-eff-slidedn { animation: tcSlideDown 0.35s ease forwards; }
 
     /* ── 스티커 오버레이 ── */
     .sticker-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
@@ -1338,7 +1355,7 @@ function renderPreviews() {
           <div class="timed-cap-list"></div>
         </div>` : ''}
         <div class="trans-row">
-          <span class="trans-label">↓ 전환</span>
+          <span class="trans-label">↓ 섹션전환</span>
           <select class="trans-select">
             ${TRANSITIONS.map(t=>`<option value="${t.v}"${t.v===dt?' selected':''}>${t.label}</option>`).join('')}
           </select>
@@ -1446,33 +1463,46 @@ function renderPreviews() {
         progressEl.value = pct;
         progressEl.style.background = `linear-gradient(to right,#f5576c ${pct}%,#ddd ${pct}%)`;
 
-        // 구간 자막 오버레이 업데이트
-        const entries = timedCaptionsPerPhoto[i] || [];
-        if (entries.length > 0) {
-          const active = entries.find(e => t >= e.start && t < e.end);
-          const captionOverlay = item.querySelector('.caption-overlay');
-          const captionInput   = item.querySelector('.caption-input');
-          const wrap           = item.querySelector('.preview-img-wrap');
-          const pos            = captionPositions[i] || {x:.5, y:.88};
-          if (active) {
-            const color    = active.color || 'white';
-            const fontSize = active.fontSize || 55;
-            const bcKey    = active.boxColor || 'black@0.5';
-            const scale    = wrap.offsetWidth / 1080;
-            const dispSize = Math.max(7, Math.round(fontSize * scale));
-            const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
-            captionOverlay.textContent       = active.text;
-            captionOverlay.style.display     = 'block';
-            captionOverlay.style.color       = color;
-            captionOverlay.style.fontSize    = dispSize + 'px';
-            captionOverlay.style.background  = bgCSS;
-            captionOverlay.style.left        = (pos.x * 100) + '%';
-            captionOverlay.style.top         = (pos.y * 100) + '%';
-          } else if (!captionInput.value.trim()) {
-            captionOverlay.style.display = 'none';
+        // SFX 미리보기 재생 (타임스탬프 통과 시)
+        const prevT = vidEl._prevT || 0;
+        (sfxEntries[i] || []).forEach(ent => {
+          if (ent.file && ent.startSec > prevT && ent.startSec <= t) {
+            const a = new Audio(URL.createObjectURL(ent.file));
+            a.play().catch(() => {});
           }
-        }
+        });
+        vidEl._prevT = t;
+
+        // 구간 자막 오버레이 업데이트 (여러 개 동시 표시)
+        const wrap = item.querySelector('.preview-img-wrap');
+        wrap.querySelectorAll('.tc-active-overlay').forEach(el => el.remove());
+        const entries  = timedCaptionsPerPhoto[i] || [];
+        const actives  = entries.filter(e => t >= e.start && t < e.end);
+        const scale    = wrap.offsetWidth / 1080;
+        const pos      = captionPositions[i] || {x:.5, y:.88};
+        actives.forEach(active => {
+          const color    = active.color    || 'white';
+          const fontSize = active.fontSize || 55;
+          const bcKey    = active.boxColor || 'black@0.5';
+          const dispSize = Math.max(7, Math.round(fontSize * scale));
+          const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
+          const ov = document.createElement('div');
+          ov.className = 'tc-active-overlay';
+          const eff = active.effect || 'none';
+          if (eff === 'fade')    ov.classList.add('tc-eff-fade');
+          else if (eff === 'slideup') ov.classList.add('tc-eff-slideup');
+          else if (eff === 'slidedn') ov.classList.add('tc-eff-slidedn');
+          ov.textContent      = active.text;
+          ov.style.color      = color;
+          ov.style.fontSize   = dispSize + 'px';
+          ov.style.background = bgCSS;
+          ov.style.left       = (pos.x * 100) + '%';
+          ov.style.top        = (pos.y * 100) + '%';
+          wrap.appendChild(ov);
+        });
       });
+
+      vidEl.addEventListener('seeked', () => { vidEl._prevT = vidEl.currentTime; });
 
       progressEl.addEventListener('input', () => {
         const dur = vidEl.duration || 0;
@@ -1491,6 +1521,7 @@ function renderPreviews() {
           const tcSize    = tc.fontSize|| 55;
           const entry = document.createElement('div');
           entry.className = 'timed-cap-entry';
+          const tcEff = tc.effect || 'none';
           entry.innerHTML = `
             <div class="tc-times-row">
               <span class="tc-time-label">시작</span>
@@ -1502,6 +1533,15 @@ function renderPreviews() {
               <input type="number" class="tc-ss tc-ss-end" min="0" max="59" step="0.1" value="${secsToSS(tc.end)}" /><span class="tc-time-label">초</span>
               <button class="tc-set-btn tc-set-end" title="현재 위치를 끝으로">▸</button>
               <button class="tc-del-btn">✕</button>
+            </div>
+            <div class="tc-style-row">
+              <span class="tc-time-label">자막효과</span>
+              <select class="tc-effect">
+                <option value="none"${tcEff==='none'?' selected':''}>없음</option>
+                <option value="fade"${tcEff==='fade'?' selected':''}>페이드</option>
+                <option value="slideup"${tcEff==='slideup'?' selected':''}>슬라이드업</option>
+                <option value="slidedn"${tcEff==='slidedn'?' selected':''}>슬라이드다운</option>
+              </select>
             </div>
             <textarea class="tc-text-input" placeholder="자막 텍스트">${tc.text}</textarea>
             <div class="tc-style-row">
@@ -1590,6 +1630,11 @@ function renderPreviews() {
             timedCaptionsPerPhoto[i][j].boxColor = e.target.value + '@0.7';
             if (hasGenerated) scheduleRegen();
           });
+          // 자막효과
+          entry.querySelector('.tc-effect').addEventListener('change', e => {
+            timedCaptionsPerPhoto[i][j].effect = e.target.value;
+            if (hasGenerated) scheduleRegen();
+          });
           tcList.appendChild(entry);
         });
       }
@@ -1601,7 +1646,7 @@ function renderPreviews() {
         timedCaptionsPerPhoto[i].push({
           text: '', start: parseFloat(lastEnd.toFixed(1)),
           end: parseFloat(Math.min(lastEnd + 3, dur).toFixed(1)),
-          color: 'white', boxColor: 'black@0.5', fontSize: 55,
+          color: 'white', boxColor: 'black@0.5', fontSize: 55, effect: 'none',
         });
         renderTimedCaptions();
       });
