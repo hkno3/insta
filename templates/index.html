@@ -196,6 +196,26 @@
       border: 1px solid #ddd; border-radius: 3px;
       font-size: .63rem; text-align: center;
     }
+    .tc-mm { width: 28px; padding: 1px 2px; border: 1px solid #ddd; border-radius: 3px; font-size: .63rem; text-align: center; }
+    .tc-ss { width: 38px; padding: 1px 2px; border: 1px solid #ddd; border-radius: 3px; font-size: .63rem; text-align: center; }
+
+    /* ── 효과음 멀티 엔트리 ── */
+    .sfx-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .add-sfx-entry-btn {
+      font-size: .63rem; padding: 2px 7px;
+      border: 1px solid #ccc; border-radius: 4px;
+      background: #fff; cursor: pointer; color: #555;
+    }
+    .add-sfx-entry-btn:hover { background: #f5f5f5; }
+    .sfx-entry {
+      border: 1px solid #eee; border-radius: 6px;
+      padding: 5px 6px; margin-bottom: 4px; background: #fafafa;
+    }
+    .sfx-entry-time-row {
+      display: flex; align-items: center; gap: 3px;
+      margin-bottom: 4px; flex-wrap: wrap;
+    }
+    .sfx-entry-presets { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; margin-bottom: 3px; }
     .tc-set-btn {
       font-size: .58rem; padding: 1px 5px;
       border: 1px solid #ccc; border-radius: 3px;
@@ -1065,8 +1085,7 @@ TRANSITIONS.forEach(t => {
 let selectedFiles      = [];
 let stickersPerPhoto   = [];
 let captionPositions   = [];   // [{x:0.5, y:0.88}, ...]
-let sfxFiles           = [];   // per-photo sound effect File or null
-let sfxPresets         = [];   // per-photo active preset id or null
+let sfxEntries         = [];   // per-photo [{file, presetId, startSec}]
 let durationsPerPhoto  = [];   // per-photo duration (images only; null = use global)
 let photoMusicFiles       = [];   // per-photo background music File or null
 let photoMusicVolumes     = [];   // per-photo background music volume (default 1.0)
@@ -1250,8 +1269,7 @@ function addFiles(files) {
   valid.forEach(() => {
     stickersPerPhoto.push([]);
     captionPositions.push({x:0.5, y:0.88});
-    sfxFiles.push(null);
-    sfxPresets.push(null);
+    sfxEntries.push([]);
     durationsPerPhoto.push(parseFloat(durationRange.value));
     photoMusicFiles.push(null);
     photoMusicVolumes.push(1.0);
@@ -1265,8 +1283,7 @@ function removeFile(idx) {
   selectedFiles.splice(idx, 1);
   stickersPerPhoto.splice(idx, 1);
   captionPositions.splice(idx, 1);
-  sfxFiles.splice(idx, 1);
-  sfxPresets.splice(idx, 1);
+  sfxEntries.splice(idx, 1);
   durationsPerPhoto.splice(idx, 1);
   photoMusicFiles.splice(idx, 1);
   photoMusicVolumes.splice(idx, 1);
@@ -1383,17 +1400,11 @@ function renderPreviews() {
           </div>
         </div>
         <div class="sfx-row">
-          <div class="sfx-top">
+          <div class="sfx-header">
             <span class="sfx-label">🔊 효과음</span>
-            <div class="sfx-btn-group">
-              ${SFX_PRESETS.map(p=>`<button class="sfx-preset-btn" data-sfx="${p.id}">${p.emoji}<span class="sfx-btn-lbl">${p.label}</span></button>`).join('')}
-              <label class="sfx-file-label">📂<input type="file" class="sfx-file-input" accept="audio/*" style="display:none" /></label>
-            </div>
+            <button class="add-sfx-entry-btn">+ 추가</button>
           </div>
-          <div class="sfx-selected" style="display:none">
-            <span class="sfx-fname"></span>
-            <button class="sfx-clear-btn" title="효과음 제거">✕</button>
-          </div>
+          <div class="sfx-entry-list"></div>
         </div>
         <div class="sticker-area">
           <span class="sticker-area-label">🎨 스티커</span>
@@ -1483,10 +1494,12 @@ function renderPreviews() {
           entry.innerHTML = `
             <div class="tc-times-row">
               <span class="tc-time-label">시작</span>
-              <input type="number" class="tc-time-input tc-start" min="0" step="0.1" value="${tc.start.toFixed(1)}" />
-              <span class="tc-time-label">끝</span>
-              <input type="number" class="tc-time-input tc-end" min="0" step="0.1" value="${tc.end.toFixed(1)}" />
+              <input type="number" class="tc-mm tc-mm-start" min="0" step="1" value="${secsToMM(tc.start)}" /><span class="tc-time-label">분</span>
+              <input type="number" class="tc-ss tc-ss-start" min="0" max="59" step="0.1" value="${secsToSS(tc.start)}" /><span class="tc-time-label">초</span>
               <button class="tc-set-btn tc-set-start" title="현재 위치를 시작으로">◂</button>
+              <span class="tc-time-label" style="margin-left:4px">끝</span>
+              <input type="number" class="tc-mm tc-mm-end" min="0" step="1" value="${secsToMM(tc.end)}" /><span class="tc-time-label">분</span>
+              <input type="number" class="tc-ss tc-ss-end" min="0" max="59" step="0.1" value="${secsToSS(tc.end)}" /><span class="tc-time-label">초</span>
               <button class="tc-set-btn tc-set-end" title="현재 위치를 끝으로">▸</button>
               <button class="tc-del-btn">✕</button>
             </div>
@@ -1516,29 +1529,27 @@ function renderPreviews() {
               </div>
             </div>
           `;
-          // 시간 입력
-          entry.querySelector('.tc-start').addEventListener('input', e => {
-            timedCaptionsPerPhoto[i][j].start = parseFloat(e.target.value) || 0;
-            if (hasGenerated) scheduleRegen();
-          });
-          entry.querySelector('.tc-end').addEventListener('input', e => {
-            timedCaptionsPerPhoto[i][j].end = parseFloat(e.target.value) || 0;
-            if (hasGenerated) scheduleRegen();
-          });
+          // 시간 입력 (분:초)
+          const mmS = entry.querySelector('.tc-mm-start'), ssS = entry.querySelector('.tc-ss-start');
+          const mmE = entry.querySelector('.tc-mm-end'),   ssE = entry.querySelector('.tc-ss-end');
+          const updateTcStart = () => { timedCaptionsPerPhoto[i][j].start = mmssToSecs(mmS.value, ssS.value); if (hasGenerated) scheduleRegen(); };
+          const updateTcEnd   = () => { timedCaptionsPerPhoto[i][j].end   = mmssToSecs(mmE.value, ssE.value); if (hasGenerated) scheduleRegen(); };
+          mmS.addEventListener('input', updateTcStart); ssS.addEventListener('input', updateTcStart);
+          mmE.addEventListener('input', updateTcEnd);   ssE.addEventListener('input', updateTcEnd);
           entry.querySelector('.tc-text-input').addEventListener('input', e => {
             timedCaptionsPerPhoto[i][j].text = e.target.value;
             if (hasGenerated) scheduleRegen();
           });
           entry.querySelector('.tc-set-start').addEventListener('click', () => {
-            const v = parseFloat(vidEl.currentTime.toFixed(1));
+            const v = vidEl.currentTime;
             timedCaptionsPerPhoto[i][j].start = v;
-            entry.querySelector('.tc-start').value = v.toFixed(1);
+            mmS.value = secsToMM(v); ssS.value = secsToSS(v);
             if (hasGenerated) scheduleRegen();
           });
           entry.querySelector('.tc-set-end').addEventListener('click', () => {
-            const v = parseFloat(vidEl.currentTime.toFixed(1));
+            const v = vidEl.currentTime;
             timedCaptionsPerPhoto[i][j].end = v;
-            entry.querySelector('.tc-end').value = v.toFixed(1);
+            mmE.value = secsToMM(v); ssE.value = secsToSS(v);
             if (hasGenerated) scheduleRegen();
           });
           entry.querySelector('.tc-del-btn').addEventListener('click', () => {
@@ -1715,68 +1726,97 @@ function renderPreviews() {
       if (photoMusicDurations[i] > 0) pmInitTrim(photoMusicDurations[i]);
     }
 
-    // ── 효과음 ──
-    const sfxInput    = item.querySelector('.sfx-file-input');
-    const sfxSelected = item.querySelector('.sfx-selected');
-    const sfxFname    = item.querySelector('.sfx-fname');
-    const sfxClearBtn = item.querySelector('.sfx-clear-btn');
-    const presetBtns  = item.querySelectorAll('.sfx-preset-btn');
+    // ── 효과음 멀티 엔트리 ──
+    if (!sfxEntries[i]) sfxEntries[i] = [];
+    const sfxEntryList = item.querySelector('.sfx-entry-list');
+    const addSfxBtn    = item.querySelector('.add-sfx-entry-btn');
+    const vidElForSfx  = isVid ? item.querySelector('video') : null;
 
-    function clearSfxState() {
-      sfxFiles[i] = null; sfxPresets[i] = null;
-      sfxInput.value = '';
-      sfxFname.textContent = '';
-      sfxSelected.style.display = 'none';
-      presetBtns.forEach(b => b.classList.remove('active'));
-    }
-
-    sfxInput.addEventListener('change', () => {
-      const f = sfxInput.files[0];
-      if (!f) return;
-      presetBtns.forEach(b => b.classList.remove('active'));
-      sfxPresets[i] = null;
-      sfxFiles[i] = f;
-      sfxFname.textContent = f.name;
-      sfxSelected.style.display = 'flex';
-      if (hasGenerated) scheduleRegen();
-    });
-
-    presetBtns.forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const sfxId = btn.dataset.sfx;
-        if (sfxPresets[i] === sfxId) { clearSfxState(); if (hasGenerated) scheduleRegen(); return; }
-        presetBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        sfxPresets[i] = sfxId;
-        sfxFname.textContent = '생성 중…';
-        sfxSelected.style.display = 'flex';
-        try {
-          const blob   = await generateSfxBlob(sfxId);
-          const preset = SFX_PRESETS.find(p => p.id === sfxId);
-          sfxFiles[i]  = new File([blob], `sfx_${sfxId}.wav`, { type: 'audio/wav' });
-          sfxFname.textContent = preset ? `${preset.emoji} ${preset.label}` : sfxId;
+    function renderSfxEntries() {
+      sfxEntryList.innerHTML = '';
+      (sfxEntries[i] || []).forEach((ent, j) => {
+        const div = document.createElement('div');
+        div.className = 'sfx-entry';
+        div.innerHTML = `
+          <div class="sfx-entry-time-row">
+            <span class="tc-time-label">시간</span>
+            <input type="number" class="tc-mm sfx-mm" min="0" step="1" value="${secsToMM(ent.startSec)}" /><span class="tc-time-label">분</span>
+            <input type="number" class="tc-ss sfx-ss" min="0" max="59" step="0.1" value="${secsToSS(ent.startSec)}" /><span class="tc-time-label">초</span>
+            ${isVid ? `<button class="tc-set-btn sfx-set-time" title="현재 재생 위치로">◂</button>` : ''}
+            <button class="tc-del-btn sfx-del">✕</button>
+          </div>
+          <div class="sfx-entry-presets">
+            ${SFX_PRESETS.map(p=>`<button class="sfx-preset-btn${ent.presetId===p.id?' active':''}" data-sfx="${p.id}">${p.emoji}<span class="sfx-btn-lbl">${p.label}</span></button>`).join('')}
+            <label class="sfx-file-label">📂<input type="file" class="sfx-file-input" accept="audio/*" style="display:none" /></label>
+          </div>
+          <div class="sfx-selected" style="display:${ent.file||ent.presetId?'flex':'none'}">
+            <span class="sfx-fname">${ent.file ? ent.file.name : (ent.presetId ? (SFX_PRESETS.find(p=>p.id===ent.presetId)||{emoji:'',label:ent.presetId}).emoji+' '+(SFX_PRESETS.find(p=>p.id===ent.presetId)||{label:ent.presetId}).label : '')}</span>
+            <button class="sfx-clear-btn" title="제거">✕</button>
+          </div>
+        `;
+        // 시간 입력
+        const mmIn = div.querySelector('.sfx-mm'), ssIn = div.querySelector('.sfx-ss');
+        const updateTime = () => { sfxEntries[i][j].startSec = mmssToSecs(mmIn.value, ssIn.value); if (hasGenerated) scheduleRegen(); };
+        mmIn.addEventListener('input', updateTime); ssIn.addEventListener('input', updateTime);
+        if (isVid && vidElForSfx) {
+          div.querySelector('.sfx-set-time').addEventListener('click', () => {
+            const v = vidElForSfx.currentTime;
+            sfxEntries[i][j].startSec = v;
+            mmIn.value = secsToMM(v); ssIn.value = secsToSS(v);
+            if (hasGenerated) scheduleRegen();
+          });
+        }
+        // 삭제
+        div.querySelector('.sfx-del').addEventListener('click', () => {
+          sfxEntries[i].splice(j, 1);
+          renderSfxEntries();
           if (hasGenerated) scheduleRegen();
-        } catch(e) { sfxFname.textContent = '오류'; console.error(e); }
+        });
+        // 프리셋 버튼
+        div.querySelectorAll('.sfx-preset-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const sfxId = btn.dataset.sfx;
+            if (sfxEntries[i][j].presetId === sfxId) {
+              sfxEntries[i][j].presetId = null; sfxEntries[i][j].file = null;
+              renderSfxEntries(); if (hasGenerated) scheduleRegen(); return;
+            }
+            div.querySelectorAll('.sfx-preset-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            sfxEntries[i][j].presetId = sfxId;
+            const selDiv = div.querySelector('.sfx-selected'), fname = div.querySelector('.sfx-fname');
+            fname.textContent = '생성 중…'; selDiv.style.display = 'flex';
+            try {
+              const blob = await generateSfxBlob(sfxId);
+              const preset = SFX_PRESETS.find(p => p.id === sfxId);
+              sfxEntries[i][j].file = new File([blob], `sfx_${sfxId}.wav`, {type:'audio/wav'});
+              fname.textContent = preset ? `${preset.emoji} ${preset.label}` : sfxId;
+              if (hasGenerated) scheduleRegen();
+            } catch(e) { fname.textContent = '오류'; console.error(e); }
+          });
+        });
+        // 파일 선택
+        div.querySelector('.sfx-file-input').addEventListener('change', e => {
+          const f = e.target.files[0]; if (!f) return;
+          sfxEntries[i][j].file = f; sfxEntries[i][j].presetId = null;
+          div.querySelectorAll('.sfx-preset-btn').forEach(b => b.classList.remove('active'));
+          const selDiv = div.querySelector('.sfx-selected'), fname = div.querySelector('.sfx-fname');
+          fname.textContent = f.name; selDiv.style.display = 'flex';
+          if (hasGenerated) scheduleRegen();
+        });
+        // 제거
+        div.querySelector('.sfx-clear-btn').addEventListener('click', () => {
+          sfxEntries[i][j].file = null; sfxEntries[i][j].presetId = null;
+          renderSfxEntries(); if (hasGenerated) scheduleRegen();
+        });
+        sfxEntryList.appendChild(div);
       });
-    });
-
-    sfxClearBtn.addEventListener('click', e => {
-      e.preventDefault();
-      clearSfxState();
-      if (hasGenerated) scheduleRegen();
-    });
-
-    // 이미 선택된 파일/프리셋 복원 (renderPreviews 재호출 시)
-    if (sfxPresets[i]) {
-      const activeBtn = item.querySelector(`.sfx-preset-btn[data-sfx="${sfxPresets[i]}"]`);
-      if (activeBtn) activeBtn.classList.add('active');
-      const preset = SFX_PRESETS.find(p => p.id === sfxPresets[i]);
-      sfxFname.textContent = preset ? `${preset.emoji} ${preset.label}` : sfxPresets[i];
-      sfxSelected.style.display = 'flex';
-    } else if (sfxFiles[i]) {
-      sfxFname.textContent = sfxFiles[i].name;
-      sfxSelected.style.display = 'flex';
     }
+
+    addSfxBtn.addEventListener('click', () => {
+      sfxEntries[i].push({ file: null, presetId: null, startSec: 0 });
+      renderSfxEntries();
+    });
+    renderSfxEntries();
 
     // ── 자막 미리보기 오버레이 업데이트 ──
     const captionOverlay  = item.querySelector('.caption-overlay');
@@ -1991,7 +2031,16 @@ function collectFormData() {
     fd.append('music_start',  musicStartSec.toFixed(2));
     fd.append('music_end',    musicEndSec > 0 ? musicEndSec.toFixed(2) : '');
   }
-  sfxFiles.forEach((f, i) => { if (f) fd.append(`sfx_${i}`, f); });
+  const sfxTimestamps = [];
+  sfxEntries.forEach((entries, i) => {
+    (entries || []).forEach((ent, j) => {
+      if (ent.file) {
+        fd.append(`sfx_${i}_${j}`, ent.file);
+        sfxTimestamps.push([i, j, ent.startSec]);
+      }
+    });
+  });
+  fd.append('sfx_timestamps', JSON.stringify(sfxTimestamps));
   fd.append('photo_durations', JSON.stringify(durationsPerPhoto));
   fd.append('timed_captions', JSON.stringify(timedCaptionsPerPhoto));
   photoMusicFiles.forEach((f, i) => {
@@ -2032,6 +2081,9 @@ function fmtTime(s) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60);
   return m + ':' + String(sec).padStart(2, '0');
 }
+function mmssToSecs(mm, ss) { return (parseFloat(mm) || 0) * 60 + (parseFloat(ss) || 0); }
+function secsToMM(s) { return Math.floor(s / 60); }
+function secsToSS(s) { return parseFloat((s % 60).toFixed(1)); }
 
 function updateFill() {
   const lo = parseFloat(startRange.value), hi = parseFloat(endRange.value);
