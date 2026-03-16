@@ -58,6 +58,17 @@ def get_media_duration(path: Path) -> float:
         return 3.0
 
 
+def has_audio_stream(path: Path) -> bool:
+    """미디어 파일에 오디오 스트림이 있는지 확인."""
+    result = subprocess.run(
+        ['ffprobe', '-v', 'error', '-select_streams', 'a:0',
+         '-show_entries', 'stream=codec_type',
+         '-of', 'default=noprint_wrappers=1:nokey=1', str(path)],
+        capture_output=True, text=True,
+    )
+    return bool(result.stdout.strip())
+
+
 def get_font_path():
     """한글/영어 지원 폰트 경로 찾기."""
     system = platform.system()
@@ -742,9 +753,9 @@ def create_video():
     sfx_keys = [k for k in request.files if k.startswith('sfx_')]
     pm_keys  = [k for k in request.files if k.startswith('photo_music_')]
 
-    if sfx_keys or pm_keys:
-        start_times = compute_sfx_start_times(prepared, duration, transitions, photo_durations)
+    start_times = compute_sfx_start_times(prepared, duration, transitions, photo_durations)
 
+    if sfx_keys or pm_keys:
         for key in sfx_keys:
             try:
                 photo_idx = int(key.split('_', 1)[1])
@@ -784,6 +795,13 @@ def create_video():
                 pm_dur = duration
             pm_start = start_times[photo_idx] if photo_idx < len(start_times) else 0.0
             photo_music_list.append((pm_path, pm_start, pm_dur, pm_vol, pm_trim_start, pm_trim_end))
+
+    # 원본 동영상 오디오를 photo_music_list에 추가 (소리 보존)
+    for i, media in enumerate(prepared):
+        if is_video(media) and has_audio_stream(media):
+            vid_dur = get_media_duration(media)
+            start_t = start_times[i] if i < len(start_times) else 0.0
+            photo_music_list.append((media, start_t, vid_dur, 1.0))
 
     # 오디오 합성
     if bg_path or sfx_list or photo_music_list:
