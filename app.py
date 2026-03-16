@@ -115,7 +115,9 @@ def _to_ffmpeg_color(color: str) -> str:
 def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
                           font_size: int = 55, color: str = 'white',
                           box_color: str = 'black@0.5',
-                          x_rel: float = 0.5, y_rel: float = 0.88) -> str:
+                          x_rel: float = 0.5, y_rel: float = 0.88,
+                          start_sec: float | None = None,
+                          end_sec: float | None = None) -> str:
     if not text or not text.strip():
         return ''
     font_path = get_font_path()
@@ -132,7 +134,7 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         box_part = f'box=1:boxcolor={bc}:boxborderw=14'
     x_expr = f'(w*{x_rel:.4f}-text_w/2)'
     y_expr = f'(h*{y_rel:.4f})'
-    return (
+    result = (
         f"drawtext={font_part}"
         f"text='{escaped}':"
         f"fontcolor={fc}:"
@@ -141,6 +143,11 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         f"y={y_expr}:"
         f"{box_part}"
     )
+    if start_sec is not None or end_sec is not None:
+        t0 = start_sec if start_sec is not None else 0.0
+        t1 = end_sec if end_sec is not None else 99999.0
+        result += f":enable='between(t,{t0:.3f},{t1:.3f})'"
+    return result
 
 
 def prepare_image(src_path: Path, dst_path: Path,
@@ -283,7 +290,8 @@ def make_video_clip(video_path: Path, clip_path: Path,
                     caption: str = '', stickers: list | None = None,
                     width: int = VIDEO_WIDTH,
                     height: int = VIDEO_HEIGHT,
-                    caption_style: dict | None = None) -> tuple[bool, str]:
+                    caption_style: dict | None = None,
+                    timed_captions: list | None = None) -> tuple[bool, str]:
     """동영상 → 클립 (비율 크롭·리스케일, 자막·스티커 포함)."""
     style     = caption_style or {}
     font_size = int(style.get('fontSize', 55))
@@ -291,7 +299,22 @@ def make_video_clip(video_path: Path, clip_path: Path,
     box_color = style.get('boxColor', 'black@0.5')
     x_rel     = float(style.get('captionX', 0.5))
     y_rel     = float(style.get('captionY', 0.88))
-    cap   = build_caption_filter(caption, height, font_size, color, box_color, x_rel, y_rel)
+    # 기본 자막 + 구간 자막을 모두 합산
+    cap_parts = []
+    base_cap = build_caption_filter(caption, height, font_size, color, box_color, x_rel, y_rel)
+    if base_cap:
+        cap_parts.append(base_cap)
+    for tc in (timed_captions or []):
+        tc_text = tc.get('text', '')
+        if not tc_text:
+            continue
+        tc_cap = build_caption_filter(
+            tc_text, height, font_size, color, box_color, x_rel, y_rel,
+            start_sec=tc.get('start'), end_sec=tc.get('end'),
+        )
+        if tc_cap:
+            cap_parts.append(tc_cap)
+    cap   = ','.join(cap_parts)
     valid = _build_valid_stickers(stickers)
     scale_crop = (f'scale={width}:{height}'
                   f':force_original_aspect_ratio=increase,'
@@ -327,9 +350,10 @@ def make_clip(media_path: Path, clip_path: Path, duration: float,
               caption: str = '', stickers: list | None = None,
               width: int = VIDEO_WIDTH,
               height: int = VIDEO_HEIGHT,
-              caption_style: dict | None = None) -> tuple[bool, str]:
+              caption_style: dict | None = None,
+              timed_captions: list | None = None) -> tuple[bool, str]:
     if is_video(media_path):
-        return make_video_clip(media_path, clip_path, caption, stickers, width, height, caption_style)
+        return make_video_clip(media_path, clip_path, caption, stickers, width, height, caption_style, timed_captions)
     return make_image_clip(media_path, clip_path, duration, caption, stickers, width, height, caption_style)
 
 
@@ -385,7 +409,8 @@ def make_video(media_paths: list[Path], output_path: Path,
                width: int = VIDEO_WIDTH,
                height: int = VIDEO_HEIGHT,
                caption_styles: list[dict] | None = None,
-               photo_durations: list | None = None) -> tuple[bool, str]:
+               photo_durations: list | None = None,
+               timed_captions_per_photo: list | None = None) -> tuple[bool, str]:
     n = len(media_paths)
     if captions is None:
         captions = [''] * n
@@ -401,6 +426,10 @@ def make_video(media_paths: list[Path], output_path: Path,
         caption_styles = [{} for _ in range(n)]
     while len(caption_styles) < n:
         caption_styles.append({})
+    if timed_captions_per_photo is None:
+        timed_captions_per_photo = [[] for _ in range(n)]
+    while len(timed_captions_per_photo) < n:
+        timed_captions_per_photo.append([])
 
     tmp_dir = output_path.parent / f'clips_{output_path.stem}'
     tmp_dir.mkdir(exist_ok=True)
@@ -415,7 +444,7 @@ def make_video(media_paths: list[Path], output_path: Path,
             dur = float(photo_durations[i])
         else:
             dur = img_duration
-        ok, err = make_clip(media, clip, dur, cap, stickers_per_photo[i], width, height, caption_styles[i])
+        ok, err = make_clip(media, clip, dur, cap, stickers_per_photo[i], width, height, caption_styles[i], timed_captions_per_photo[i])
         if not ok:
             _cleanup(tmp_dir)
             return False, err
@@ -669,11 +698,12 @@ def create_video():
     music_end_raw = request.form.get('music_end', '')
     music_end    = float(music_end_raw) if music_end_raw else 0.0
     duration = float(request.form.get('duration', 3.0))
-    captions_json        = request.form.get('captions',        '[]')
-    transitions_json     = request.form.get('transitions',     '[]')
-    stickers_json        = request.form.get('stickers',        '[]')
-    caption_styles_json  = request.form.get('caption_styles',  '[]')
-    photo_durations_json = request.form.get('photo_durations', '[]')
+    captions_json            = request.form.get('captions',        '[]')
+    transitions_json         = request.form.get('transitions',     '[]')
+    stickers_json            = request.form.get('stickers',        '[]')
+    caption_styles_json      = request.form.get('caption_styles',  '[]')
+    photo_durations_json     = request.form.get('photo_durations', '[]')
+    timed_captions_json      = request.form.get('timed_captions',  '[]')
     fmt = request.form.get('format', 'portrait')
     width, height = FORMATS.get(fmt, (VIDEO_WIDTH, VIDEO_HEIGHT))
 
@@ -697,6 +727,12 @@ def create_video():
         photo_durations = json.loads(photo_durations_json)
     except Exception:
         photo_durations = []
+    try:
+        timed_captions_per_photo = json.loads(timed_captions_json)
+        if not isinstance(timed_captions_per_photo, list):
+            timed_captions_per_photo = []
+    except Exception:
+        timed_captions_per_photo = []
 
     if not files or all(f.filename == '' for f in files):
         return jsonify({'error': '파일을 하나 이상 업로드해 주세요.'}), 400
@@ -732,7 +768,8 @@ def create_video():
     video_path = OUTPUT_FOLDER / f'{job_id}.mp4'
     success, err_msg = make_video(
         prepared, video_path, duration, transitions, captions,
-        stickers_per_photo, width, height, caption_styles, photo_durations
+        stickers_per_photo, width, height, caption_styles, photo_durations,
+        timed_captions_per_photo
     )
 
     if not success:
