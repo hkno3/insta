@@ -137,41 +137,37 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         box_part = f'box=1:boxcolor={bc}:boxborderw=14'
     x_expr = f'(w*{x_rel:.4f}-text_w/2)'
     y_expr = f'(h*{y_rel:.4f})'
-    extra = ''
+    extra  = ''
 
     if start_sec is not None or end_sec is not None:
-        t0 = start_sec if start_sec is not None else 0.0
-        t1 = end_sec if end_sec is not None else 99999.0
-        fade = max(0.05, float(effect_duration))
-        # slide_range is in preview px; multiply ~5x to get video pixels
-        slide = max(10, int(slide_range)) * 5
-        t_frac = f'max(0,min(1,(t-{t0:.3f})/{fade:.3f}))'
-        ena   = f"between(t,{t0:.3f},{t1:.3f})"
+        t0    = start_sec if start_sec is not None else 0.0
+        t1    = end_sec   if end_sec   is not None else 99999.0
+        fade  = max(0.05, float(effect_duration))
+        # slide_range is in preview px (~300px wide); scale to video (1080px wide)
+        slide = max(10, int(slide_range)) * 4
+        # linear progress 0→1 over fade_duration (clamped, no nested max/min)
+        prog  = (f'if(lt(t,{t0:.3f}),0,'
+                 f'if(gt(t,{t0+fade:.3f}),1,'
+                 f'(t-{t0:.3f})/{fade:.3f}))')
+        ena   = f'between(t,{t0:.3f},{t1:.3f})'
 
-        if effect == 'fade':
-            extra = (f":alpha='if({ena},if(lt(t-{t0:.3f},{fade:.3f})"
-                     f",(t-{t0:.3f})/{fade:.3f},1),0)':enable='{ena}'")
-        elif effect == 'slideup':
-            y_expr = f'((h*{y_rel:.4f})+{slide}*(1-{t_frac}))'
-            extra  = f":alpha='if({ena},{t_frac},0)':enable='{ena}'"
+        if effect == 'slideup':
+            y_expr = f'((h*{y_rel:.4f})+{slide}*(1-({prog})))'
+            extra  = f":enable='{ena}'"
         elif effect == 'slidedn':
-            y_expr = f'((h*{y_rel:.4f})-{slide}*(1-{t_frac}))'
-            extra  = f":alpha='if({ena},{t_frac},0)':enable='{ena}'"
+            y_expr = f'((h*{y_rel:.4f})-{slide}*(1-({prog})))'
+            extra  = f":enable='{ena}'"
         elif effect == 'slideleft':
-            x_expr = f'((w*{x_rel:.4f}-text_w/2)-{slide}*(1-{t_frac}))'
-            extra  = f":alpha='if({ena},{t_frac},0)':enable='{ena}'"
+            x_expr = f'((w*{x_rel:.4f}-text_w/2)-{slide}*(1-({prog})))'
+            extra  = f":enable='{ena}'"
         elif effect == 'slideright':
-            x_expr = f'((w*{x_rel:.4f}-text_w/2)+{slide}*(1-{t_frac}))'
-            extra  = f":alpha='if({ena},{t_frac},0)':enable='{ena}'"
+            x_expr = f'((w*{x_rel:.4f}-text_w/2)+{slide}*(1-({prog})))'
+            extra  = f":enable='{ena}'"
         elif effect == 'blink':
-            half = fade / 2
-            extra = (f":alpha='if({ena},"
-                     f"if(lt(mod(t-{t0:.3f},{fade:.3f}),{half:.3f}),1,0),0)':enable='{ena}'")
-        elif effect in ('zoomin', 'zoomout', 'pop', 'roll'):
-            # FFmpeg drawtext doesn't support dynamic fontsize; fall back to fade-in
-            extra = (f":alpha='if({ena},if(lt(t-{t0:.3f},{fade:.3f})"
-                     f",(t-{t0:.3f})/{fade:.3f},1),0)':enable='{ena}'")
+            half  = fade / 2
+            extra = f":enable='if({ena},lt(mod(t-{t0:.3f},{fade:.3f}),{half:.3f}),0)'"
         else:
+            # fade, zoomin, zoomout, pop, roll, none → just show/hide at boundary
             extra = f":enable='{ena}'"
 
     return (
