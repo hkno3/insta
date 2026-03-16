@@ -117,7 +117,8 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
                           box_color: str = 'black@0.5',
                           x_rel: float = 0.5, y_rel: float = 0.88,
                           start_sec: float | None = None,
-                          end_sec: float | None = None) -> str:
+                          end_sec: float | None = None,
+                          effect: str | None = None) -> str:
     if not text or not text.strip():
         return ''
     font_path = get_font_path()
@@ -146,7 +147,13 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
     if start_sec is not None or end_sec is not None:
         t0 = start_sec if start_sec is not None else 0.0
         t1 = end_sec if end_sec is not None else 99999.0
-        result += f":enable='between(t,{t0:.3f},{t1:.3f})'"
+        if effect == 'fade':
+            fade = 0.35
+            alpha_expr = (f"if(between(t,{t0:.3f},{t1:.3f}),"
+                          f"if(lt(t-{t0:.3f},{fade}),(t-{t0:.3f})/{fade},1),0)")
+            result += f":alpha='{alpha_expr}':enable='between(t,{t0:.3f},{t1:.3f})'"
+        else:
+            result += f":enable='between(t,{t0:.3f},{t1:.3f})'"
     return result
 
 
@@ -315,6 +322,7 @@ def make_video_clip(video_path: Path, clip_path: Path,
             tc.get('boxColor', box_color) or box_color,
             x_rel, y_rel,
             start_sec=tc.get('start'), end_sec=tc.get('end'),
+            effect=tc.get('effect'),
         )
         if tc_cap:
             cap_parts.append(tc_cap)
