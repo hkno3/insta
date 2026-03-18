@@ -1519,11 +1519,8 @@ function renderPreviews() {
           <select class="font-select">
             <option value="">나눔고딕 (기본)</option>
             <option value="nanum_myeongjo">나눔명조</option>
-            <option value="breip">✍ Breip (손글씨)</option>
           </select>
           <button class="text-style-btn bold-btn" title="굵게"><b>B</b></button>
-          <button class="text-style-btn italic-btn" title="기울이기"><i>I</i></button>
-          <button class="text-style-btn underline-btn" title="밑줄"><u>U</u></button>
         </div>
         <div class="caption-style-row">
           <span class="style-label-sm">색상</span>
@@ -1761,12 +1758,10 @@ function renderPreviews() {
 
       const FONT_OPTIONS_HTML = `
         <option value="">나눔고딕 (기본)</option>
-        <option value="nanum_myeongjo">나눔명조</option>
-        <option value="breip">✍ Breip (손글씨)</option>`;
+        <option value="nanum_myeongjo">나눔명조</option>`;
 
       const FONT_FAMILY_MAP = {
         'nanum_myeongjo':'Georgia,serif','nanum_myeongjo_bold':'Georgia,serif',
-        'breip':'cursive',
       };
 
       function bcKeyToCSS(bcKey) {
@@ -1787,10 +1782,8 @@ function renderPreviews() {
         ov.style.color          = tc.color || 'white';
         ov.style.fontSize       = dispSize + 'px';
         ov.style.background     = bgCSS;
-        ov.style.fontWeight     = tc.bold      ? 'bold'      : 'normal';
-        ov.style.fontStyle      = tc.italic    ? 'italic'    : 'normal';
-        ov.style.textDecoration = tc.underline ? 'underline' : 'none';
-        ov.style.fontFamily     = FONT_FAMILY_MAP[tc.font || ''] || '';
+        ov.style.fontWeight = tc.bold ? 'bold' : 'normal';
+        ov.style.fontFamily = FONT_FAMILY_MAP[tc.font || ''] || '';
       }
 
       function updateTcOverlayStyle(j) {
@@ -1894,8 +1887,6 @@ function renderPreviews() {
               <span class="tc-time-label">폰트</span>
               <select class="tc-font-select" style="flex:1;font-size:.65rem;padding:1px 3px;border:1px solid #ddd;border-radius:3px;background:#fff">${FONT_OPTIONS_HTML}</select>
               <button class="text-style-btn tc-bold-btn${tcBold?' active':''}" title="굵게"><b>B</b></button>
-              <button class="text-style-btn tc-italic-btn${tcItalic?' active':''}" title="기울이기"><i>I</i></button>
-              <button class="text-style-btn tc-underline-btn${tcUnderline?' active':''}" title="밑줄"><u>U</u></button>
             </div>
           `;
           // 폰트 초기값 복원
@@ -1906,7 +1897,7 @@ function renderPreviews() {
             updateTcOverlayStyle(j);
             if (hasGenerated) scheduleRegen();
           });
-          [['tc-bold-btn','bold'],['tc-italic-btn','italic'],['tc-underline-btn','underline']].forEach(([cls, key]) => {
+          [['tc-bold-btn','bold']].forEach(([cls, key]) => {
             entry.querySelector('.' + cls).addEventListener('click', () => {
               timedCaptionsPerPhoto[i][j][key] = !timedCaptionsPerPhoto[i][j][key];
               entry.querySelector('.' + cls).classList.toggle('active');
@@ -2244,12 +2235,10 @@ function renderPreviews() {
     const bcSwatches      = item.querySelectorAll('.bcswatch');
     const boxPicker       = item.querySelector('.boxcolor-picker');
     const fontSelect      = item.querySelector('.font-select');
-    const boldBtn         = item.querySelector('.bold-btn');
-    const italicBtn       = item.querySelector('.italic-btn');
-    const underlineBtn    = item.querySelector('.underline-btn');
+    const boldBtn = item.querySelector('.bold-btn');
 
-    // 굵기/기울이기/밑줄 토글
-    [boldBtn, italicBtn, underlineBtn].forEach(btn => {
+    // 굵기 토글
+    [boldBtn].forEach(btn => {
       btn.addEventListener('click', () => {
         btn.classList.toggle('active');
         updateCaptionOverlay();
@@ -2286,9 +2275,7 @@ function renderPreviews() {
         captionOverlay.style.background      = bgCSS;
         captionOverlay.style.left            = (pos.x * 100) + '%';
         captionOverlay.style.top             = (pos.y * 100) + '%';
-        captionOverlay.style.fontWeight      = boldBtn.classList.contains('active') ? 'bold' : 'normal';
-        captionOverlay.style.fontStyle       = italicBtn.classList.contains('active') ? 'italic' : 'normal';
-        captionOverlay.style.textDecoration  = underlineBtn.classList.contains('active') ? 'underline' : 'none';
+        captionOverlay.style.fontWeight = boldBtn.classList.contains('active') ? 'bold' : 'normal';
       } else {
         captionOverlay.style.display = 'none';
       }
@@ -2449,11 +2436,9 @@ function collectFormData() {
     const bpicker   = ctrl.querySelector('.boxcolor-picker');
     const boxColor  = activeBc ? activeBc.dataset.boxcolor : (bpicker.value + '@0.65');
     const pos       = captionPositions[idx] || {x:0.5, y:0.88};
-    const font      = ctrl.querySelector('.font-select')?.value || '';
-    const bold      = ctrl.querySelector('.bold-btn')?.classList.contains('active') || false;
-    const italic    = ctrl.querySelector('.italic-btn')?.classList.contains('active') || false;
-    const underline = ctrl.querySelector('.underline-btn')?.classList.contains('active') || false;
-    return { color, fontSize, boxColor, captionX: pos.x, captionY: pos.y, font, bold, italic, underline };
+    const font = ctrl.querySelector('.font-select')?.value || '';
+    const bold = ctrl.querySelector('.bold-btn')?.classList.contains('active') || false;
+    return { color, fontSize, boxColor, captionX: pos.x, captionY: pos.y, font, bold };
   });
   const fd = new FormData();
   selectedFiles.forEach(f => fd.append('photos', f));
