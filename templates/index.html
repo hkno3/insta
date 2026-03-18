@@ -220,21 +220,21 @@
     }
     .add-timed-cap-btn:hover { background: #f5f5f5; }
     .timed-cap-entry {
-      border: 1px solid #eee; border-radius: 6px;
-      padding: 5px 6px; margin-bottom: 4px; background: #fafafa;
+      border: 1px solid #eee; border-radius: 8px;
+      padding: 8px 10px; margin-bottom: 6px; background: #fafafa;
     }
     .tc-times-row {
-      display: flex; align-items: center; gap: 3px;
-      margin-bottom: 4px; flex-wrap: wrap;
+      display: flex; align-items: center; gap: 4px;
+      margin-bottom: 5px; flex-wrap: wrap;
     }
-    .tc-time-label { font-size: .58rem; color: #aaa; flex-shrink: 0; }
+    .tc-time-label { font-size: .72rem; color: #888; flex-shrink: 0; }
     .tc-time-input {
-      width: 44px; padding: 1px 3px;
+      width: 48px; padding: 2px 4px;
       border: 1px solid #ddd; border-radius: 3px;
-      font-size: .63rem; text-align: center;
+      font-size: .72rem; text-align: center;
     }
-    .tc-mm { width: 28px; padding: 1px 2px; border: 1px solid #ddd; border-radius: 3px; font-size: .63rem; text-align: center; }
-    .tc-ss { width: 38px; padding: 1px 2px; border: 1px solid #ddd; border-radius: 3px; font-size: .63rem; text-align: center; }
+    .tc-mm { width: 32px; padding: 2px 3px; border: 1px solid #ddd; border-radius: 3px; font-size: .72rem; text-align: center; }
+    .tc-ss { width: 44px; padding: 2px 3px; border: 1px solid #ddd; border-radius: 3px; font-size: .72rem; text-align: center; }
 
     /* ── 효과음 멀티 엔트리 ── */
     .sfx-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
@@ -254,53 +254,53 @@
     }
     .sfx-entry-presets { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; margin-bottom: 3px; }
     .tc-set-btn {
-      font-size: .58rem; padding: 1px 5px;
+      font-size: .68rem; padding: 2px 7px;
       border: 1px solid #ccc; border-radius: 3px;
       background: #fff; cursor: pointer; color: #555; flex-shrink: 0;
     }
     .tc-set-btn:hover { background: #eef; }
     .tc-del-btn {
-      margin-left: auto; font-size: .63rem; padding: 1px 5px;
+      margin-left: auto; font-size: .72rem; padding: 2px 7px;
       border: none; border-radius: 3px;
       background: #fee; color: #f55; cursor: pointer;
     }
     .tc-text-input {
-      width: 100%; padding: 3px 5px;
+      width: 100%; padding: 4px 6px;
       border: 1px solid #ddd; border-radius: 3px;
-      font-size: .7rem; resize: none; height: 30px; margin-bottom: 3px;
+      font-size: .8rem; resize: none; height: 36px; margin-bottom: 4px;
     }
     .tc-style-row {
-      display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-      padding-top: 2px;
+      display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+      padding-top: 3px;
     }
-    .tc-swatches { display: flex; gap: 2px; align-items: center; }
+    .tc-swatches { display: flex; gap: 3px; align-items: center; }
     .tc-swatch {
-      width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #ddd;
+      width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid #ddd;
       cursor: pointer; padding: 0; flex-shrink: 0;
     }
     .tc-swatch.active { border-color: #f5576c; transform: scale(1.2); }
     .tc-bc-swatch {
-      width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid #ddd;
+      width: 17px; height: 17px; border-radius: 3px; border: 1.5px solid #ddd;
       cursor: pointer; padding: 0; flex-shrink: 0; font-size: .5rem;
       display: flex; align-items: center; justify-content: center;
     }
     .tc-bc-swatch.active { border-color: #f5576c; transform: scale(1.2); }
     .tc-font-size {
-      width: 38px; padding: 1px 3px;
+      width: 44px; padding: 2px 4px;
       border: 1px solid #ddd; border-radius: 3px;
-      font-size: .6rem; text-align: center;
+      font-size: .72rem; text-align: center;
     }
     .tc-color-picker, .tc-boxcolor-picker {
       width: 16px; height: 16px; padding: 0; border: 1px solid #ddd;
       border-radius: 3px; cursor: pointer;
     }
     .tc-effect {
-      font-size: .6rem; padding: 1px 3px; border: 1px solid #ddd;
+      font-size: .72rem; padding: 2px 4px; border: 1px solid #ddd;
       border-radius: 3px; background: #fff;
     }
     .tc-eff-dur, .tc-slide-range {
-      width: 38px; padding: 1px 3px; border: 1px solid #ddd;
-      border-radius: 3px; font-size: .6rem; text-align: center;
+      width: 44px; padding: 2px 4px; border: 1px solid #ddd;
+      border-radius: 3px; font-size: .72rem; text-align: center;
     }
 
     /* ── 자막 미리보기 오버레이 ── */
@@ -1672,6 +1672,7 @@ function renderPreviews() {
       const progressEl = item.querySelector('.vid-progress');
 
       const BC_CSS2 = {'none':'transparent','black@0.5':'rgba(0,0,0,.5)','white@0.6':'rgba(255,255,255,.6)','#1a1a2e@0.75':'rgba(26,26,46,.75)','#7b2d8b@0.65':'rgba(123,45,139,.65)'};
+      const wrap = item.querySelector('.preview-img-wrap');
 
       function togglePlay() { vidEl.paused ? vidEl.play() : vidEl.pause(); }
 
@@ -1705,7 +1706,6 @@ function renderPreviews() {
         vidEl._prevT = t;
 
         // 구간 자막 오버레이 업데이트 (여러 개 동시 표시, 애니메이션 재시작 방지)
-        const wrap = item.querySelector('.preview-img-wrap');
         const entries   = timedCaptionsPerPhoto[i] || [];
         const newActive = new Set(
           entries.map((e, j) => (t >= e.start && t < e.end) ? j : -1).filter(j => j >= 0)
@@ -1718,12 +1718,7 @@ function renderPreviews() {
         });
         // 새로 활성화된 자막 추가 / 기존 자막 위치만 업데이트
         newActive.forEach(j => {
-          const active   = entries[j];
-          const color    = active.color    || 'white';
-          const fontSize = active.fontSize || 55;
-          const bcKey    = active.boxColor || 'black@0.5';
-          const dispSize = Math.max(7, Math.round(fontSize * scale));
-          const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
+          const active = entries[j];
           // 각 자막 고유 위치 사용
           const tcX = active.x !== undefined ? active.x : 0.5;
           const tcY = active.y !== undefined ? active.y : 0.82;
@@ -1751,14 +1746,9 @@ function renderPreviews() {
           ov.style.setProperty('--tc-anim-dur', dur);
           ov.style.setProperty('--tc-slide-y',  slideY);
           ov.textContent      = active.text;
-          ov.style.color          = color;
-          ov.style.fontSize       = dispSize + 'px';
-          ov.style.background     = bgCSS;
-          ov.style.fontWeight     = active.bold      ? 'bold'      : 'normal';
-          ov.style.fontStyle      = active.italic    ? 'italic'    : 'normal';
-          ov.style.textDecoration = active.underline ? 'underline' : 'none';
-          ov.style.left       = lx;
-          ov.style.top        = ly;
+          applyTcStyleToEl(ov, active, scale);
+          ov.style.left = lx;
+          ov.style.top  = ly;
           const startDrag = (clientX, clientY) => {
             const tc = timedCaptionsPerPhoto[i][j];
             ov.classList.add('dragging');
@@ -1816,12 +1806,23 @@ function renderPreviews() {
           <option value="dejavu_sans">DejaVu Sans</option>
         </optgroup>`;
 
-      function updateTcOverlayStyle(j) {
-        const tc = (timedCaptionsPerPhoto[i] || [])[j];
-        if (!tc) return;
-        const ov = wrap.querySelector(`.tc-active-overlay[data-tc-idx="${j}"]`);
-        if (!ov) return;
-        const scale    = wrap.offsetWidth / 1080;
+      const FONT_FAMILY_MAP = {
+        'nanum_gothic':'sans-serif','nanum_gothic_bold':'sans-serif',
+        'nanum_myeongjo':'Georgia,serif','nanum_myeongjo_bold':'Georgia,serif',
+        'nanum_square':'sans-serif','nanum_square_bold':'sans-serif',
+        'nanum_square_round':'sans-serif','nanum_square_round_bold':'sans-serif',
+        'nanum_barun_gothic':'sans-serif',
+        'roboto':"'Roboto','Arial',sans-serif",'roboto_bold':"'Roboto','Arial',sans-serif",
+        'roboto_light':"'Roboto','Arial',sans-serif",
+        'roboto_condensed':"'Arial Narrow',sans-serif",'roboto_condensed_bold':"'Arial Narrow',sans-serif",
+        'open_sans':"'Open Sans','Arial',sans-serif",'open_sans_bold':"'Open Sans','Arial',sans-serif",
+        'open_sans_light':"'Open Sans','Arial',sans-serif",
+        'breip':'cursive','z003_italic':'cursive','bookman_italic':"'Book Antiqua','Palatino',serif",
+        'dejavu_sans':'sans-serif','dejavu_sans_bold':'sans-serif',
+        'dejavu_serif':"'DejaVu Serif',serif",'dejavu_serif_bold':"'DejaVu Serif',serif",
+      };
+
+      function applyTcStyleToEl(ov, tc, scale) {
         const dispSize = Math.max(7, Math.round((tc.fontSize || 55) * scale));
         const bcKey    = tc.boxColor || 'black@0.5';
         const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
@@ -1831,6 +1832,28 @@ function renderPreviews() {
         ov.style.fontWeight     = tc.bold      ? 'bold'      : 'normal';
         ov.style.fontStyle      = tc.italic    ? 'italic'    : 'normal';
         ov.style.textDecoration = tc.underline ? 'underline' : 'none';
+        ov.style.fontFamily     = FONT_FAMILY_MAP[tc.font || ''] || '';
+      }
+
+      function updateTcOverlayStyle(j) {
+        const tc = (timedCaptionsPerPhoto[i] || [])[j];
+        if (!tc) return;
+        const scale = wrap.offsetWidth / 1080;
+        let ov = wrap.querySelector(`.tc-active-overlay[data-tc-idx="${j}"]`);
+        if (!ov) {
+          // 오버레이가 없으면 임시 미리보기 생성
+          ov = document.createElement('div');
+          ov.className = 'tc-active-overlay';
+          ov.dataset.tcIdx = j;
+          ov.textContent = tc.text || '자막 미리보기';
+          ov.style.left = ((tc.x !== undefined ? tc.x : 0.5) * 100) + '%';
+          ov.style.top  = ((tc.y !== undefined ? tc.y : 0.82) * 100) + '%';
+          wrap.appendChild(ov);
+          // 3초 뒤 자동 제거 (timeupdate가 없을 때)
+          setTimeout(() => { if (ov.parentNode) ov.remove(); }, 3000);
+        }
+        applyTcStyleToEl(ov, tc, scale);
+        ov.textContent = tc.text || '자막 미리보기';
       }
 
       function renderTimedCaptions() {
