@@ -96,6 +96,33 @@ def get_font_path():
     return None
 
 
+# 선택 가능한 폰트 목록 (프론트엔드와 동기화)
+FONTS = {
+    'nanum_gothic':        '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
+    'nanum_gothic_bold':   '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
+    'nanum_myeongjo':      '/usr/share/fonts/truetype/nanum/NanumMyeongjo.ttf',
+    'nanum_myeongjo_bold': '/usr/share/fonts/truetype/nanum/NanumMyeongjoBold.ttf',
+    'nanum_square':        '/usr/share/fonts/truetype/nanum/NanumSquareR.ttf',
+    'nanum_square_bold':   '/usr/share/fonts/truetype/nanum/NanumSquareB.ttf',
+    'nanum_square_round':  '/usr/share/fonts/truetype/nanum/NanumSquareRoundR.ttf',
+    'nanum_square_round_bold': '/usr/share/fonts/truetype/nanum/NanumSquareRoundB.ttf',
+    'nanum_barun_gothic':  '/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf',
+    'dejavu_sans':         '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    'dejavu_sans_bold':    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    'dejavu_serif':        '/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf',
+    'dejavu_serif_bold':   '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf',
+}
+
+
+def resolve_font(font_key: str | None) -> str | None:
+    """폰트 키 → 파일 경로. 없으면 기본 폰트 반환."""
+    if font_key and font_key in FONTS:
+        path = FONTS[font_key]
+        if os.path.exists(path):
+            return path
+    return get_font_path()
+
+
 def escape_drawtext(text: str) -> str:
     text = text.replace('\\', '\\\\')
     text = text.replace(':', '\\:')
@@ -120,10 +147,20 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
                           end_sec: float | None = None,
                           effect: str | None = None,
                           effect_duration: float = 1.0,
-                          slide_range: int = 30) -> str:
+                          slide_range: int = 30,
+                          font: str | None = None,
+                          bold: bool = False,
+                          italic: bool = False,
+                          underline: bool = False) -> str:
     if not text or not text.strip():
         return ''
-    font_path = get_font_path()
+    # bold 요청 시 해당 폰트의 bold 변형 파일 선택
+    font_key = font
+    if bold and font_key and font_key + '_bold' in FONTS:
+        font_key = font_key + '_bold'
+    elif bold and not font_key:
+        font_key = 'nanum_gothic_bold'
+    font_path = resolve_font(font_key)
     escaped = escape_drawtext(text.strip())
     fp = font_path.replace('\\', '/') if font_path else ''
     if len(fp) >= 2 and fp[1] == ':':
@@ -137,6 +174,11 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         box_part = f'box=1:boxcolor={bc}:boxborderw=14'
     x_expr = f'(w*{x_rel:.4f}-text_w/2)'
     y_expr = f'(h*{y_rel:.4f})'
+    style_flags = ''
+    if italic:
+        style_flags += ':italic=1'
+    if underline:
+        style_flags += ':underline=1'
     extra  = ''
 
     if start_sec is not None or end_sec is not None:
@@ -177,7 +219,7 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         f"fontsize={font_size}:"
         f"x='{x_expr}':"
         f"y='{y_expr}':"
-        f"{box_part}{extra}"
+        f"{box_part}{style_flags}{extra}"
     )
 
 
@@ -292,7 +334,12 @@ def make_image_clip(img_path: Path, clip_path: Path, duration: float,
     box_color = style.get('boxColor', 'black@0.5')
     x_rel     = float(style.get('captionX', 0.5))
     y_rel     = float(style.get('captionY', 0.88))
-    cap   = build_caption_filter(caption, height, font_size, color, box_color, x_rel, y_rel)
+    font      = style.get('font') or None
+    bold      = bool(style.get('bold', False))
+    italic    = bool(style.get('italic', False))
+    underline = bool(style.get('underline', False))
+    cap   = build_caption_filter(caption, height, font_size, color, box_color, x_rel, y_rel,
+                                  font=font, bold=bold, italic=italic, underline=underline)
     valid = _build_valid_stickers(stickers)
 
     if not valid:
@@ -339,9 +386,14 @@ def make_video_clip(video_path: Path, clip_path: Path,
     box_color = style.get('boxColor', 'black@0.5')
     x_rel     = float(style.get('captionX', 0.5))
     y_rel     = float(style.get('captionY', 0.88))
+    font      = style.get('font') or None
+    bold      = bool(style.get('bold', False))
+    italic    = bool(style.get('italic', False))
+    underline = bool(style.get('underline', False))
     # 기본 자막 + 구간 자막을 모두 합산
     cap_parts = []
-    base_cap = build_caption_filter(caption, height, font_size, color, box_color, x_rel, y_rel)
+    base_cap = build_caption_filter(caption, height, font_size, color, box_color, x_rel, y_rel,
+                                     font=font, bold=bold, italic=italic, underline=underline)
     if base_cap:
         cap_parts.append(base_cap)
     for tc in (timed_captions or []):
@@ -360,6 +412,10 @@ def make_video_clip(video_path: Path, clip_path: Path,
             effect=tc.get('effect'),
             effect_duration=float(tc.get('effectDuration', 1.0)),
             slide_range=int(tc.get('slideRange', 30)),
+            font=tc.get('font', font),
+            bold=bool(tc.get('bold', bold)),
+            italic=bool(tc.get('italic', italic)),
+            underline=bool(tc.get('underline', underline)),
         )
         if tc_cap:
             cap_parts.append(tc_cap)

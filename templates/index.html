@@ -411,6 +411,22 @@
       width: 24px; height: 20px; border: 1.5px solid #ddd; border-radius: 5px;
       padding: 0; cursor: pointer; background: none; flex-shrink: 0;
     }
+    /* 폰트 선택 드롭다운 */
+    .font-select {
+      flex: 1; min-width: 0; padding: 3px 6px; font-size: .75rem;
+      border: 1.5px solid #ddd; border-radius: 7px; outline: none;
+      background: #fff; color: #333; cursor: pointer;
+    }
+    .font-select:focus { border-color: #f5576c; }
+    /* 굵기/기울이기/밑줄 토글 버튼 */
+    .text-style-btn {
+      flex-shrink: 0; padding: 2px 7px; font-size: .8rem;
+      border: 1.5px solid #ddd; border-radius: 6px;
+      background: #fff; color: #555; cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .text-style-btn:hover { border-color: #f5576c; color: #f5576c; }
+    .text-style-btn.active { background: #fff0f3; border-color: #f5576c; color: #f5576c; }
 
     /* ── 가로/1:1 포맷: 이미지 위, 컨트롤 아래 column 레이아웃 ── */
     #preview-grid[data-format="landscape"] .preview-item,
@@ -1499,6 +1515,28 @@ function renderPreviews() {
         </div>
         <textarea class="caption-input" placeholder="전체 자막 (선택사항)"></textarea>
         <div class="caption-style-row">
+          <span class="style-label-sm">폰트</span>
+          <select class="font-select">
+            <option value="">기본(나눔고딕)</option>
+            <option value="nanum_gothic">나눔고딕</option>
+            <option value="nanum_gothic_bold">나눔고딕 굵게</option>
+            <option value="nanum_myeongjo">나눔명조</option>
+            <option value="nanum_myeongjo_bold">나눔명조 굵게</option>
+            <option value="nanum_square">나눔스퀘어</option>
+            <option value="nanum_square_bold">나눔스퀘어 굵게</option>
+            <option value="nanum_square_round">나눔스퀘어라운드</option>
+            <option value="nanum_square_round_bold">나눔스퀘어라운드 굵게</option>
+            <option value="nanum_barun_gothic">나눔바른고딕</option>
+            <option value="dejavu_sans">DejaVu Sans</option>
+            <option value="dejavu_sans_bold">DejaVu Sans 굵게</option>
+            <option value="dejavu_serif">DejaVu Serif</option>
+            <option value="dejavu_serif_bold">DejaVu Serif 굵게</option>
+          </select>
+          <button class="text-style-btn bold-btn" title="굵게"><b>B</b></button>
+          <button class="text-style-btn italic-btn" title="기울이기"><i>I</i></button>
+          <button class="text-style-btn underline-btn" title="밑줄"><u>U</u></button>
+        </div>
+        <div class="caption-style-row">
           <span class="style-label-sm">색상</span>
           <div class="color-swatches">
             <button class="cswatch active" data-color="white"   style="background:#fff;"    title="흰색"></button>
@@ -2135,6 +2173,19 @@ function renderPreviews() {
     const fontSizeInput   = item.querySelector('.font-size-input');
     const bcSwatches      = item.querySelectorAll('.bcswatch');
     const boxPicker       = item.querySelector('.boxcolor-picker');
+    const fontSelect      = item.querySelector('.font-select');
+    const boldBtn         = item.querySelector('.bold-btn');
+    const italicBtn       = item.querySelector('.italic-btn');
+    const underlineBtn    = item.querySelector('.underline-btn');
+
+    // 굵기/기울이기/밑줄 토글
+    [boldBtn, italicBtn, underlineBtn].forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+        updateCaptionOverlay();
+        if (hasGenerated) scheduleRegen();
+      });
+    });
 
     // boxcolor 프리셋 → CSS rgba 변환
     const BC_CSS = {
@@ -2145,26 +2196,29 @@ function renderPreviews() {
     };
 
     function updateCaptionOverlay() {
-      const text     = captionInput.value;
-      const activeSw = item.querySelector('.cswatch.active');
-      const color    = activeSw ? activeSw.dataset.color : colorPicker.value;
-      const fontSize = parseInt(fontSizeInput.value) || 55;
-      const wrap     = item.querySelector('.preview-img-wrap');
-      const scale    = wrap.offsetWidth / 1080;
-      const dispSize = Math.max(7, Math.round(fontSize * scale));
-      const activeBc = item.querySelector('.bcswatch.active');
-      const bcKey    = activeBc ? activeBc.dataset.boxcolor : null;
-      const bgCSS    = bcKey != null ? (BC_CSS[bcKey] || (bcKey === 'none' ? 'transparent' : 'rgba(0,0,0,.5)'))
-                                     : (boxPicker.value + 'aa');
+      const text      = captionInput.value;
+      const activeSw  = item.querySelector('.cswatch.active');
+      const color     = activeSw ? activeSw.dataset.color : colorPicker.value;
+      const fontSize  = parseInt(fontSizeInput.value) || 55;
+      const wrap      = item.querySelector('.preview-img-wrap');
+      const scale     = wrap.offsetWidth / 1080;
+      const dispSize  = Math.max(7, Math.round(fontSize * scale));
+      const activeBc  = item.querySelector('.bcswatch.active');
+      const bcKey     = activeBc ? activeBc.dataset.boxcolor : null;
+      const bgCSS     = bcKey != null ? (BC_CSS[bcKey] || (bcKey === 'none' ? 'transparent' : 'rgba(0,0,0,.5)'))
+                                      : (boxPicker.value + 'aa');
       const pos = captionPositions[i];
       if (text.trim()) {
-        captionOverlay.style.display    = 'block';
-        captionOverlay.textContent      = text;
-        captionOverlay.style.color      = color;
-        captionOverlay.style.fontSize   = dispSize + 'px';
-        captionOverlay.style.background = bgCSS;
-        captionOverlay.style.left       = (pos.x * 100) + '%';
-        captionOverlay.style.top        = (pos.y * 100) + '%';
+        captionOverlay.style.display         = 'block';
+        captionOverlay.textContent           = text;
+        captionOverlay.style.color           = color;
+        captionOverlay.style.fontSize        = dispSize + 'px';
+        captionOverlay.style.background      = bgCSS;
+        captionOverlay.style.left            = (pos.x * 100) + '%';
+        captionOverlay.style.top             = (pos.y * 100) + '%';
+        captionOverlay.style.fontWeight      = boldBtn.classList.contains('active') ? 'bold' : 'normal';
+        captionOverlay.style.fontStyle       = italicBtn.classList.contains('active') ? 'italic' : 'normal';
+        captionOverlay.style.textDecoration  = underlineBtn.classList.contains('active') ? 'underline' : 'none';
       } else {
         captionOverlay.style.display = 'none';
       }
@@ -2209,6 +2263,7 @@ function renderPreviews() {
       if (hasGenerated) scheduleRegen();
     });
     fontSizeInput.addEventListener('input', () => { updateCaptionOverlay(); if (hasGenerated) scheduleRegen(); });
+    fontSelect.addEventListener('change', () => { updateCaptionOverlay(); if (hasGenerated) scheduleRegen(); });
 
     // 배경 색상 스와치
     bcSwatches.forEach(sw => {
@@ -2324,7 +2379,11 @@ function collectFormData() {
     const bpicker   = ctrl.querySelector('.boxcolor-picker');
     const boxColor  = activeBc ? activeBc.dataset.boxcolor : (bpicker.value + '@0.65');
     const pos       = captionPositions[idx] || {x:0.5, y:0.88};
-    return { color, fontSize, boxColor, captionX: pos.x, captionY: pos.y };
+    const font      = ctrl.querySelector('.font-select')?.value || '';
+    const bold      = ctrl.querySelector('.bold-btn')?.classList.contains('active') || false;
+    const italic    = ctrl.querySelector('.italic-btn')?.classList.contains('active') || false;
+    const underline = ctrl.querySelector('.underline-btn')?.classList.contains('active') || false;
+    return { color, fontSize, boxColor, captionX: pos.x, captionY: pos.y, font, bold, italic, underline };
   });
   const fd = new FormData();
   selectedFiles.forEach(f => fd.append('photos', f));
