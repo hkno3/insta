@@ -98,40 +98,11 @@ def get_font_path():
 
 # 선택 가능한 폰트 목록 (프론트엔드와 동기화)
 FONTS = {
-    # ── 나눔 한글 폰트 ──
-    'nanum_gothic':            '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
-    'nanum_gothic_bold':       '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
-    'nanum_myeongjo':          '/usr/share/fonts/truetype/nanum/NanumMyeongjo.ttf',
-    'nanum_myeongjo_bold':     '/usr/share/fonts/truetype/nanum/NanumMyeongjoBold.ttf',
-    'nanum_square':            '/usr/share/fonts/truetype/nanum/NanumSquareR.ttf',
-    'nanum_square_bold':       '/usr/share/fonts/truetype/nanum/NanumSquareB.ttf',
-    'nanum_square_round':      '/usr/share/fonts/truetype/nanum/NanumSquareRoundR.ttf',
-    'nanum_square_round_bold': '/usr/share/fonts/truetype/nanum/NanumSquareRoundB.ttf',
-    'nanum_barun_gothic':      '/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf',
-    # ── Roboto (구글 현대 폰트) ──
-    'roboto':                       '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf',
-    'roboto_bold':                  '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf',
-    'roboto_light':                 '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Light.ttf',
-    'roboto_italic':                '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Italic.ttf',
-    'roboto_bold_italic':           '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-BoldItalic.ttf',
-    'roboto_condensed':             '/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Regular.ttf',
-    'roboto_condensed_bold':        '/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Bold.ttf',
-    'roboto_condensed_italic':      '/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Italic.ttf',
-    # ── Open Sans (가독성 높은 서체) ──
-    'open_sans':                    '/usr/share/fonts/truetype/open-sans/OpenSans-Regular.ttf',
-    'open_sans_bold':               '/usr/share/fonts/truetype/open-sans/OpenSans-Bold.ttf',
-    'open_sans_light':              '/usr/share/fonts/truetype/open-sans/OpenSans-Light.ttf',
-    'open_sans_italic':             '/usr/share/fonts/truetype/open-sans/OpenSans-Italic.ttf',
-    'open_sans_bold_italic':        '/usr/share/fonts/truetype/open-sans/OpenSans-BoldItalic.ttf',
-    # ── 필기체·캘리그라피 ──
-    'breip':                   '/usr/share/fonts/truetype/breip/Breip.ttf',          # 손글씨
-    'z003_italic':             '/usr/share/fonts/opentype/urw-base35/Z003-MediumItalic.otf',  # 클래식 캘리그라피
-    'bookman_italic':          '/usr/share/fonts/opentype/urw-base35/URWBookman-LightItalic.otf',  # 우아한 이탤릭
-    # ── DejaVu ──
-    'dejavu_sans':             '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    'dejavu_sans_bold':        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-    'dejavu_serif':            '/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf',
-    'dejavu_serif_bold':       '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf',
+    'nanum_gothic':        '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
+    'nanum_gothic_bold':   '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
+    'nanum_myeongjo':      '/usr/share/fonts/truetype/nanum/NanumMyeongjo.ttf',
+    'nanum_myeongjo_bold': '/usr/share/fonts/truetype/nanum/NanumMyeongjoBold.ttf',
+    'breip':               '/usr/share/fonts/truetype/breip/Breip.ttf',
 }
 
 
