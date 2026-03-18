@@ -2334,6 +2334,10 @@ function collectFormData() {
   fd.append('stickers',       JSON.stringify(stickersPerPhoto));
   fd.append('caption_styles', JSON.stringify(captionStyles));
   fd.append('format',         selectedFormat);
+  const fitModes = Array.from(previewGrid.querySelectorAll('.preview-item')).map(
+    it => it.querySelector('.fit-toggle-btn')?.classList.contains('fit-mode') ? true : false
+  );
+  fd.append('fit_modes', JSON.stringify(fitModes));
   if (selectedMusicFile) {
     fd.append('music', selectedMusicFile);
     fd.append('music_volume', document.getElementById('music-volume').value);
