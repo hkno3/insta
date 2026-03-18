@@ -102,7 +102,7 @@ FONTS = {
     'nanum_gothic_bold':   '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
     'nanum_myeongjo':      '/usr/share/fonts/truetype/nanum/NanumMyeongjo.ttf',
     'nanum_myeongjo_bold': '/usr/share/fonts/truetype/nanum/NanumMyeongjoBold.ttf',
-    'breip':               '/usr/share/fonts/truetype/breip/Breip.ttf',
+    'breip':               '/usr/share/fonts/truetype/custom/Breip.ttf',
 }
 
 
@@ -146,8 +146,6 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
                           underline: bool = False) -> str:
     if not text or not text.strip():
         return ''
-    import sys
-    print(f'[DEBUG build_caption] text={text!r} font={font!r} bold={bold} italic={italic} underline={underline}', file=sys.stderr, flush=True)
     # 폰트 변형 선택 (italic=1/underline=1 은 구 FFmpeg 미지원 → 이탤릭 폰트 파일로 대체)
     font_key = font
     if italic and bold and font_key and font_key + '_bold_italic' in FONTS:
@@ -159,7 +157,6 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
     elif bold and not font_key:
         font_key = 'nanum_gothic_bold'
     font_path = resolve_font(font_key)
-    print(f'[DEBUG build_caption] font_key={font_key!r} font_path={font_path!r}', file=sys.stderr, flush=True)
     escaped = escape_drawtext(text.strip())
     fp = font_path.replace('\\', '/') if font_path else ''
     if len(fp) >= 2 and fp[1] == ':':
@@ -888,9 +885,6 @@ def create_video():
     if not prepared:
         return jsonify({'error': '유효한 파일이 없습니다.'}), 400
 
-    import sys
-    print(f'[DEBUG /create] caption_styles={caption_styles}', file=sys.stderr, flush=True)
-    print(f'[DEBUG /create] timed_captions_per_photo={timed_captions_per_photo}', file=sys.stderr, flush=True)
     video_path = OUTPUT_FOLDER / f'{job_id}.mp4'
     success, err_msg = make_video(
         prepared, video_path, duration, transitions, captions,
