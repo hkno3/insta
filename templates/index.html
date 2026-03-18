@@ -1517,20 +1517,30 @@ function renderPreviews() {
         <div class="caption-style-row">
           <span class="style-label-sm">폰트</span>
           <select class="font-select">
-            <option value="">기본(나눔고딕)</option>
-            <option value="nanum_gothic">나눔고딕</option>
-            <option value="nanum_gothic_bold">나눔고딕 굵게</option>
-            <option value="nanum_myeongjo">나눔명조</option>
-            <option value="nanum_myeongjo_bold">나눔명조 굵게</option>
-            <option value="nanum_square">나눔스퀘어</option>
-            <option value="nanum_square_bold">나눔스퀘어 굵게</option>
-            <option value="nanum_square_round">나눔스퀘어라운드</option>
-            <option value="nanum_square_round_bold">나눔스퀘어라운드 굵게</option>
-            <option value="nanum_barun_gothic">나눔바른고딕</option>
-            <option value="dejavu_sans">DejaVu Sans</option>
-            <option value="dejavu_sans_bold">DejaVu Sans 굵게</option>
-            <option value="dejavu_serif">DejaVu Serif</option>
-            <option value="dejavu_serif_bold">DejaVu Serif 굵게</option>
+            <optgroup label="── 한글 ──">
+              <option value="">나눔고딕 (기본)</option>
+              <option value="nanum_gothic">나눔고딕</option>
+              <option value="nanum_myeongjo">나눔명조</option>
+              <option value="nanum_square">나눔스퀘어</option>
+              <option value="nanum_square_round">나눔스퀘어라운드</option>
+              <option value="nanum_barun_gothic">나눔바른고딕</option>
+            </optgroup>
+            <optgroup label="── 현대 ──">
+              <option value="roboto">Roboto</option>
+              <option value="roboto_light">Roboto Light</option>
+              <option value="roboto_condensed">Roboto Condensed</option>
+              <option value="open_sans">Open Sans</option>
+              <option value="open_sans_light">Open Sans Light</option>
+            </optgroup>
+            <optgroup label="── 필기체/캘리 ──">
+              <option value="breip">✍ Breip (손글씨)</option>
+              <option value="z003_italic">✒ Z003 (캘리그라피)</option>
+              <option value="bookman_italic">📖 Bookman Italic (우아한체)</option>
+            </optgroup>
+            <optgroup label="── 세리프 ──">
+              <option value="dejavu_serif">DejaVu Serif</option>
+              <option value="dejavu_sans">DejaVu Sans</option>
+            </optgroup>
           </select>
           <button class="text-style-btn bold-btn" title="굵게"><b>B</b></button>
           <button class="text-style-btn italic-btn" title="기울이기"><i>I</i></button>
@@ -1741,9 +1751,12 @@ function renderPreviews() {
           ov.style.setProperty('--tc-anim-dur', dur);
           ov.style.setProperty('--tc-slide-y',  slideY);
           ov.textContent      = active.text;
-          ov.style.color      = color;
-          ov.style.fontSize   = dispSize + 'px';
-          ov.style.background = bgCSS;
+          ov.style.color          = color;
+          ov.style.fontSize       = dispSize + 'px';
+          ov.style.background     = bgCSS;
+          ov.style.fontWeight     = active.bold      ? 'bold'      : 'normal';
+          ov.style.fontStyle      = active.italic    ? 'italic'    : 'normal';
+          ov.style.textDecoration = active.underline ? 'underline' : 'none';
           ov.style.left       = lx;
           ov.style.top        = ly;
           const startDrag = (clientX, clientY) => {
@@ -1777,12 +1790,59 @@ function renderPreviews() {
       const tcList   = item.querySelector('.timed-cap-list');
       const addTcBtn = item.querySelector('.add-timed-cap-btn');
 
+      const FONT_OPTIONS_HTML = `
+        <optgroup label="── 한글 ──">
+          <option value="">나눔고딕 (기본)</option>
+          <option value="nanum_gothic">나눔고딕</option>
+          <option value="nanum_myeongjo">나눔명조</option>
+          <option value="nanum_square">나눔스퀘어</option>
+          <option value="nanum_square_round">나눔스퀘어라운드</option>
+          <option value="nanum_barun_gothic">나눔바른고딕</option>
+        </optgroup>
+        <optgroup label="── 현대 ──">
+          <option value="roboto">Roboto</option>
+          <option value="roboto_light">Roboto Light</option>
+          <option value="roboto_condensed">Roboto Condensed</option>
+          <option value="open_sans">Open Sans</option>
+          <option value="open_sans_light">Open Sans Light</option>
+        </optgroup>
+        <optgroup label="── 필기체/캘리 ──">
+          <option value="breip">✍ Breip (손글씨)</option>
+          <option value="z003_italic">✒ Z003 (캘리그라피)</option>
+          <option value="bookman_italic">📖 Bookman Italic (우아한체)</option>
+        </optgroup>
+        <optgroup label="── 세리프 ──">
+          <option value="dejavu_serif">DejaVu Serif</option>
+          <option value="dejavu_sans">DejaVu Sans</option>
+        </optgroup>`;
+
+      function updateTcOverlayStyle(j) {
+        const tc = (timedCaptionsPerPhoto[i] || [])[j];
+        if (!tc) return;
+        const ov = wrap.querySelector(`.tc-active-overlay[data-tc-idx="${j}"]`);
+        if (!ov) return;
+        const scale    = wrap.offsetWidth / 1080;
+        const dispSize = Math.max(7, Math.round((tc.fontSize || 55) * scale));
+        const bcKey    = tc.boxColor || 'black@0.5';
+        const bgCSS    = BC_CSS2[bcKey] || (bcKey.includes('@') ? 'rgba(0,0,0,.5)' : bcKey + 'aa');
+        ov.style.color          = tc.color || 'white';
+        ov.style.fontSize       = dispSize + 'px';
+        ov.style.background     = bgCSS;
+        ov.style.fontWeight     = tc.bold      ? 'bold'      : 'normal';
+        ov.style.fontStyle      = tc.italic    ? 'italic'    : 'normal';
+        ov.style.textDecoration = tc.underline ? 'underline' : 'none';
+      }
+
       function renderTimedCaptions() {
         tcList.innerHTML = '';
         (timedCaptionsPerPhoto[i] || []).forEach((tc, j) => {
           const tcColor   = tc.color   || 'white';
           const tcBox     = tc.boxColor|| 'black@0.5';
           const tcSize    = tc.fontSize|| 55;
+          const tcFont    = tc.font    || '';
+          const tcBold    = !!tc.bold;
+          const tcItalic  = !!tc.italic;
+          const tcUnderline = !!tc.underline;
           const entry = document.createElement('div');
           entry.className = 'timed-cap-entry';
           const tcEff       = tc.effect         || 'none';
@@ -1849,7 +1909,30 @@ function renderPreviews() {
                 <input type="color" class="tc-boxcolor-picker" value="#000000" />
               </div>
             </div>
+            <div class="tc-style-row">
+              <span class="tc-time-label">폰트</span>
+              <select class="tc-font-select" style="flex:1;font-size:.65rem;padding:1px 3px;border:1px solid #ddd;border-radius:3px;background:#fff">${FONT_OPTIONS_HTML}</select>
+              <button class="text-style-btn tc-bold-btn${tcBold?' active':''}" title="굵게"><b>B</b></button>
+              <button class="text-style-btn tc-italic-btn${tcItalic?' active':''}" title="기울이기"><i>I</i></button>
+              <button class="text-style-btn tc-underline-btn${tcUnderline?' active':''}" title="밑줄"><u>U</u></button>
+            </div>
           `;
+          // 폰트 초기값 복원
+          entry.querySelector('.tc-font-select').value = tcFont;
+          // 폰트/굵기/기울임/밑줄 핸들러
+          entry.querySelector('.tc-font-select').addEventListener('change', e => {
+            timedCaptionsPerPhoto[i][j].font = e.target.value;
+            updateTcOverlayStyle(j);
+            if (hasGenerated) scheduleRegen();
+          });
+          [['tc-bold-btn','bold'],['tc-italic-btn','italic'],['tc-underline-btn','underline']].forEach(([cls, key]) => {
+            entry.querySelector('.' + cls).addEventListener('click', () => {
+              timedCaptionsPerPhoto[i][j][key] = !timedCaptionsPerPhoto[i][j][key];
+              entry.querySelector('.' + cls).classList.toggle('active');
+              updateTcOverlayStyle(j);
+              if (hasGenerated) scheduleRegen();
+            });
+          });
           // 시간 입력 (분:초)
           const mmS = entry.querySelector('.tc-mm-start'), ssS = entry.querySelector('.tc-ss-start');
           const mmE = entry.querySelector('.tc-mm-end'),   ssE = entry.querySelector('.tc-ss-end');
@@ -1884,17 +1967,20 @@ function renderPreviews() {
               entry.querySelectorAll('.tc-swatch').forEach(s => s.classList.remove('active'));
               sw.classList.add('active');
               timedCaptionsPerPhoto[i][j].color = sw.dataset.color;
+              updateTcOverlayStyle(j);
               if (hasGenerated) scheduleRegen();
             });
           });
           entry.querySelector('.tc-color-picker').addEventListener('input', e => {
             entry.querySelectorAll('.tc-swatch').forEach(s => s.classList.remove('active'));
             timedCaptionsPerPhoto[i][j].color = e.target.value;
+            updateTcOverlayStyle(j);
             if (hasGenerated) scheduleRegen();
           });
           // 글자 크기
           entry.querySelector('input.tc-font-size').addEventListener('input', e => {
             timedCaptionsPerPhoto[i][j].fontSize = parseInt(e.target.value) || 55;
+            updateTcOverlayStyle(j);
             if (hasGenerated) scheduleRegen();
           });
           // 배경색 스와치
@@ -1903,12 +1989,14 @@ function renderPreviews() {
               entry.querySelectorAll('.tc-bc-swatch').forEach(s => s.classList.remove('active'));
               sw.classList.add('active');
               timedCaptionsPerPhoto[i][j].boxColor = sw.dataset.bc;
+              updateTcOverlayStyle(j);
               if (hasGenerated) scheduleRegen();
             });
           });
           entry.querySelector('.tc-boxcolor-picker').addEventListener('input', e => {
             entry.querySelectorAll('.tc-bc-swatch').forEach(s => s.classList.remove('active'));
             timedCaptionsPerPhoto[i][j].boxColor = e.target.value + '@0.7';
+            updateTcOverlayStyle(j);
             if (hasGenerated) scheduleRegen();
           });
           // 자막효과
@@ -1949,6 +2037,7 @@ function renderPreviews() {
           color: 'white', boxColor: 'black@0.5', fontSize: 55,
           effect: 'none', effectDuration: 1.0, slideRange: 30,
           x: 0.5, y: Math.max(0.1, 0.82 - existingLen * 0.1),
+          font: '', bold: false, italic: false, underline: false,
         });
         renderTimedCaptions();
       });
