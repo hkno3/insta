@@ -22,8 +22,8 @@
       transition: max-width .4s ease;
     }
     .card.edit-mode {
-      max-width: 1180px;
-      display: grid; grid-template-columns: 1fr 1fr;
+      max-width: 1500px;
+      display: grid; grid-template-columns: 3fr 2fr;
       gap: 40px; align-items: start;
     }
     .left-panel  { min-width: 0; }
@@ -129,6 +129,27 @@
       display: flex; flex-direction: column;
       border-radius: 14px 0 0 14px; overflow: hidden;
     }
+
+    /* ── 썸네일 크기 조절 핸들 ── */
+    .preview-resize-handle {
+      flex-shrink: 0; width: 8px;
+      background: #e8e8e8;
+      cursor: col-resize;
+      position: relative;
+      transition: background .15s;
+    }
+    .preview-resize-handle:hover,
+    .preview-resize-handle.dragging { background: #f5576c; }
+    .preview-resize-handle::after {
+      content: ''; position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px; height: 30px;
+      background: #aaa; border-radius: 2px;
+    }
+    .preview-resize-handle.dragging::after { background: #fff; }
+    #preview-grid[data-format="landscape"] .preview-resize-handle,
+    #preview-grid[data-format="square"] .preview-resize-handle { display: none; }
     /* preview-img-wrap은 preview-left 안으로 이동하므로 너비/border-radius 조정 */
     .preview-left .preview-img-wrap {
       width: 100%; border-radius: 0; flex: none;
@@ -441,11 +462,14 @@
     }
     .sticker-area-label {
       font-size: .68rem; color: #aaa; font-weight: 700;
-      padding-bottom: 4px; display: block;
+      padding-bottom: 4px;
+      cursor: pointer; user-select: none;
+      display: flex; align-items: center; gap: 4px;
     }
+    .sticker-area-label .sticker-toggle-arrow { font-style: normal; font-size: .65rem; }
 
     /* 팔레트 패널 */
-    .sticker-panel { display: block; }
+    .sticker-panel { display: none; }
 
     /* 카테고리 탭 */
     .sticker-tabs {
@@ -1134,6 +1158,7 @@ let isGenerating       = false;
 
 /* ── 드래그/리사이즈 상태 ── */
 let interaction = null;
+let imgResizeDrag = null;
 let activeVidEl = null;  // 가장 최근 활성화된 영상
 
 /* ── 스티커 DOM 배치 ── */
@@ -1267,8 +1292,21 @@ function handleEnd() {
   interaction = null;
   if (hasGenerated) scheduleRegen();
 }
-document.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
-document.addEventListener('mouseup', handleEnd);
+document.addEventListener('mousemove', e => {
+  handleMove(e.clientX, e.clientY);
+  if (imgResizeDrag) {
+    const dx = e.clientX - imgResizeDrag.startX;
+    const newW = Math.max(100, Math.min(500, imgResizeDrag.startWidth + dx));
+    imgResizeDrag.previewLeft.style.width = newW + 'px';
+  }
+});
+document.addEventListener('mouseup', e => {
+  handleEnd();
+  if (imgResizeDrag) {
+    imgResizeDrag.handle.classList.remove('dragging');
+    imgResizeDrag = null;
+  }
+});
 document.addEventListener('touchmove', e => { if (!interaction) return; e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
 document.addEventListener('touchend', handleEnd);
 
@@ -1406,6 +1444,7 @@ function renderPreviews() {
           </div>
         </div>` : ''}
       </div>
+      <div class="preview-resize-handle" title="드래그하여 크기 조절"></div>
       <div class="preview-controls">
         ${isVid ? `<div class="timed-cap-wrap">
           <div class="timed-cap-header">
@@ -1484,7 +1523,7 @@ function renderPreviews() {
           <div class="sfx-entry-list"></div>
         </div>
         <div class="sticker-area">
-          <span class="sticker-area-label">🎨 스티커</span>
+          <span class="sticker-area-label">🎨 스티커 <em class="sticker-toggle-arrow">▼</em></span>
           <div class="sticker-panel">${buildPaletteHTML()}</div>
         </div>
       </div>
@@ -1492,6 +1531,25 @@ function renderPreviews() {
 
     item.querySelector('.remove-photo-btn').addEventListener('click', () => removeFile(i));
     item.querySelector('.trans-select').addEventListener('change', () => { if (hasGenerated) scheduleRegen(); });
+
+    // ── 썸네일 크기 조절 핸들 ──
+    const resizeHandle  = item.querySelector('.preview-resize-handle');
+    const previewLeftEl = item.querySelector('.preview-left');
+    resizeHandle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      imgResizeDrag = { handle: resizeHandle, previewLeft: previewLeftEl, startX: e.clientX, startWidth: previewLeftEl.offsetWidth };
+      resizeHandle.classList.add('dragging');
+    });
+
+    // ── 스티커 패널 토글 ──
+    const stickerLabel = item.querySelector('.sticker-area-label');
+    const stickerPanel = item.querySelector('.sticker-panel');
+    const stickerArrow = stickerLabel.querySelector('.sticker-toggle-arrow');
+    stickerLabel.addEventListener('click', () => {
+      const isOpen = stickerPanel.style.display === 'block';
+      stickerPanel.style.display = isOpen ? 'none' : 'block';
+      stickerArrow.textContent = isOpen ? '▼' : '▲';
+    });
 
     // ── 동영상 재생 컨트롤 (영상 아래 바) ──
     if (isVid) {
