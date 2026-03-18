@@ -113,6 +113,15 @@
       font-size: .75rem; cursor: pointer; z-index: 10;
       display: flex; align-items: center; justify-content: center;
     }
+    .fit-toggle-btn {
+      position: absolute; bottom: 4px; right: 4px;
+      background: rgba(0,0,0,.65); color: #fff; border: none;
+      border-radius: 4px; padding: 2px 6px;
+      font-size: .58rem; font-weight: 700; cursor: pointer; z-index: 10;
+      transition: background .15s;
+    }
+    .fit-toggle-btn:hover { background: #f5576c; }
+    .fit-toggle-btn.fit-mode { background: rgba(245,87,108,.85); }
 
     /* 오른쪽: 컨트롤 */
     .preview-controls {
@@ -148,8 +157,15 @@
       background: #aaa; border-radius: 2px;
     }
     .preview-resize-handle.dragging::after { background: #fff; }
+    /* 가로/정사각형: 핸들을 세로 리사이즈용 수평 바로 변환 */
     #preview-grid[data-format="landscape"] .preview-resize-handle,
-    #preview-grid[data-format="square"] .preview-resize-handle { display: none; }
+    #preview-grid[data-format="square"] .preview-resize-handle {
+      width: 100%; height: 8px; cursor: row-resize;
+    }
+    #preview-grid[data-format="landscape"] .preview-resize-handle::after,
+    #preview-grid[data-format="square"] .preview-resize-handle::after {
+      width: 30px; height: 2px;
+    }
     /* preview-img-wrap은 preview-left 안으로 이동하므로 너비/border-radius 조정 */
     .preview-left .preview-img-wrap {
       width: 100%; border-radius: 0; flex: none;
@@ -1295,9 +1311,16 @@ function handleEnd() {
 document.addEventListener('mousemove', e => {
   handleMove(e.clientX, e.clientY);
   if (imgResizeDrag) {
-    const dx = e.clientX - imgResizeDrag.startX;
-    const newW = Math.max(100, Math.min(500, imgResizeDrag.startWidth + dx));
-    imgResizeDrag.previewLeft.style.width = newW + 'px';
+    if (imgResizeDrag.isVertical) {
+      const dy = e.clientY - imgResizeDrag.startY;
+      const newH = Math.max(80, Math.min(700, imgResizeDrag.startHeight + dy));
+      imgResizeDrag.imgWrap.style.height = newH + 'px';
+      imgResizeDrag.imgWrap.style.aspectRatio = 'unset';
+    } else {
+      const dx = e.clientX - imgResizeDrag.startX;
+      const newW = Math.max(100, Math.min(500, imgResizeDrag.startWidth + dx));
+      imgResizeDrag.previewLeft.style.width = newW + 'px';
+    }
   }
 });
 document.addEventListener('mouseup', e => {
@@ -1431,6 +1454,7 @@ function renderPreviews() {
           ${mediaTpl}
           <span class="order-badge">${i+1}</span>
           <button class="remove-photo-btn" title="삭제">×</button>
+          <button class="fit-toggle-btn" title="맞춤/채움 전환">채움</button>
           <div class="caption-overlay"></div>
           <div class="sticker-layer"></div>
         </div>
@@ -1537,7 +1561,15 @@ function renderPreviews() {
     const previewLeftEl = item.querySelector('.preview-left');
     resizeHandle.addEventListener('mousedown', e => {
       e.preventDefault();
-      imgResizeDrag = { handle: resizeHandle, previewLeft: previewLeftEl, startX: e.clientX, startWidth: previewLeftEl.offsetWidth };
+      const fmt = previewGrid.dataset.format;
+      const isVertical = fmt === 'landscape' || fmt === 'square';
+      const imgWrapEl = item.querySelector('.preview-img-wrap');
+      imgResizeDrag = {
+        handle: resizeHandle, previewLeft: previewLeftEl, imgWrap: imgWrapEl,
+        isVertical,
+        startX: e.clientX, startY: e.clientY,
+        startWidth: previewLeftEl.offsetWidth, startHeight: imgWrapEl.offsetHeight,
+      };
       resizeHandle.classList.add('dragging');
     });
 
@@ -1549,6 +1581,22 @@ function renderPreviews() {
       const isOpen = stickerPanel.style.display === 'block';
       stickerPanel.style.display = isOpen ? 'none' : 'block';
       stickerArrow.textContent = isOpen ? '▼' : '▲';
+    });
+
+    // ── FIT/FILL 토글 ──
+    const fitBtn   = item.querySelector('.fit-toggle-btn');
+    const mediaEl  = item.querySelector('.preview-img-wrap img') || item.querySelector('.preview-img-wrap video');
+    fitBtn.addEventListener('click', () => {
+      const isFit = fitBtn.classList.contains('fit-mode');
+      if (isFit) {
+        mediaEl.style.objectFit = 'cover';
+        fitBtn.textContent = '채움';
+        fitBtn.classList.remove('fit-mode');
+      } else {
+        mediaEl.style.objectFit = 'contain';
+        fitBtn.textContent = '맞춤';
+        fitBtn.classList.add('fit-mode');
+      }
     });
 
     // ── 동영상 재생 컨트롤 (영상 아래 바) ──
