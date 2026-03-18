@@ -1122,6 +1122,20 @@ document.getElementById('format-picker').addEventListener('click', e => {
   selectedFormat = btn.dataset.fmt;
   document.documentElement.style.setProperty('--preview-ratio', FORMAT_RATIOS[selectedFormat]);
   previewGrid.dataset.format = selectedFormat;
+  // 포맷 전환 시 모든 아이템의 기본 맞춤/채움 상태 업데이트
+  const needsFit = selectedFormat === 'landscape' || selectedFormat === 'square';
+  previewGrid.querySelectorAll('.preview-item').forEach(it => {
+    const mEl  = it.querySelector('.preview-img-wrap img') || it.querySelector('.preview-img-wrap video');
+    const fBtn = it.querySelector('.fit-toggle-btn');
+    if (!mEl || !fBtn) return;
+    if (needsFit) {
+      mEl.style.objectFit = 'contain';
+      fBtn.textContent = '맞춤'; fBtn.classList.add('fit-mode');
+    } else {
+      mEl.style.objectFit = 'cover';
+      fBtn.textContent = '채움'; fBtn.classList.remove('fit-mode');
+    }
+  });
   if (hasGenerated) scheduleRegen();
 });
 
@@ -1586,18 +1600,21 @@ function renderPreviews() {
     // ── FIT/FILL 토글 ──
     const fitBtn   = item.querySelector('.fit-toggle-btn');
     const mediaEl  = item.querySelector('.preview-img-wrap img') || item.querySelector('.preview-img-wrap video');
-    fitBtn.addEventListener('click', () => {
-      const isFit = fitBtn.classList.contains('fit-mode');
-      if (isFit) {
-        mediaEl.style.objectFit = 'cover';
-        fitBtn.textContent = '채움';
-        fitBtn.classList.remove('fit-mode');
-      } else {
+
+    function applyFitMode(fit) {
+      if (fit) {
         mediaEl.style.objectFit = 'contain';
-        fitBtn.textContent = '맞춤';
-        fitBtn.classList.add('fit-mode');
+        fitBtn.textContent = '맞춤'; fitBtn.classList.add('fit-mode');
+      } else {
+        mediaEl.style.objectFit = 'cover';
+        fitBtn.textContent = '채움'; fitBtn.classList.remove('fit-mode');
       }
-    });
+    }
+    // 가로/정사각형 포맷이면 기본값을 맞춤(contain)으로 설정
+    const initFmt = previewGrid.dataset.format;
+    applyFitMode(initFmt === 'landscape' || initFmt === 'square');
+
+    fitBtn.addEventListener('click', () => applyFitMode(!fitBtn.classList.contains('fit-mode')));
 
     // ── 동영상 재생 컨트롤 (영상 아래 바) ──
     if (isVid) {
