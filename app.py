@@ -109,15 +109,20 @@ FONTS = {
     'nanum_square_round_bold': '/usr/share/fonts/truetype/nanum/NanumSquareRoundB.ttf',
     'nanum_barun_gothic':      '/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf',
     # ── Roboto (구글 현대 폰트) ──
-    'roboto':                  '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf',
-    'roboto_bold':             '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf',
-    'roboto_light':            '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Light.ttf',
-    'roboto_condensed':        '/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Regular.ttf',
-    'roboto_condensed_bold':   '/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Bold.ttf',
+    'roboto':                       '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf',
+    'roboto_bold':                  '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf',
+    'roboto_light':                 '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Light.ttf',
+    'roboto_italic':                '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Italic.ttf',
+    'roboto_bold_italic':           '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-BoldItalic.ttf',
+    'roboto_condensed':             '/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Regular.ttf',
+    'roboto_condensed_bold':        '/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Bold.ttf',
+    'roboto_condensed_italic':      '/usr/share/fonts/truetype/roboto/unhinted/RobotoCondensed-Italic.ttf',
     # ── Open Sans (가독성 높은 서체) ──
-    'open_sans':               '/usr/share/fonts/truetype/open-sans/OpenSans-Regular.ttf',
-    'open_sans_bold':          '/usr/share/fonts/truetype/open-sans/OpenSans-Bold.ttf',
-    'open_sans_light':         '/usr/share/fonts/truetype/open-sans/OpenSans-Light.ttf',
+    'open_sans':                    '/usr/share/fonts/truetype/open-sans/OpenSans-Regular.ttf',
+    'open_sans_bold':               '/usr/share/fonts/truetype/open-sans/OpenSans-Bold.ttf',
+    'open_sans_light':              '/usr/share/fonts/truetype/open-sans/OpenSans-Light.ttf',
+    'open_sans_italic':             '/usr/share/fonts/truetype/open-sans/OpenSans-Italic.ttf',
+    'open_sans_bold_italic':        '/usr/share/fonts/truetype/open-sans/OpenSans-BoldItalic.ttf',
     # ── 필기체·캘리그라피 ──
     'breip':                   '/usr/share/fonts/truetype/breip/Breip.ttf',          # 손글씨
     'z003_italic':             '/usr/share/fonts/opentype/urw-base35/Z003-MediumItalic.otf',  # 클래식 캘리그라피
@@ -170,9 +175,13 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
                           underline: bool = False) -> str:
     if not text or not text.strip():
         return ''
-    # bold 요청 시 해당 폰트의 bold 변형 파일 선택
+    # 폰트 변형 선택 (italic=1/underline=1 은 구 FFmpeg 미지원 → 이탤릭 폰트 파일로 대체)
     font_key = font
-    if bold and font_key and font_key + '_bold' in FONTS:
+    if italic and bold and font_key and font_key + '_bold_italic' in FONTS:
+        font_key = font_key + '_bold_italic'
+    elif italic and font_key and font_key + '_italic' in FONTS:
+        font_key = font_key + '_italic'
+    elif bold and font_key and font_key + '_bold' in FONTS:
         font_key = font_key + '_bold'
     elif bold and not font_key:
         font_key = 'nanum_gothic_bold'
@@ -190,11 +199,7 @@ def build_caption_filter(text: str, height: int = VIDEO_HEIGHT,
         box_part = f'box=1:boxcolor={bc}:boxborderw=14'
     x_expr = f'(w*{x_rel:.4f}-text_w/2)'
     y_expr = f'(h*{y_rel:.4f})'
-    style_flags = ''
-    if italic:
-        style_flags += ':italic=1'
-    if underline:
-        style_flags += ':underline=1'
+    style_flags = ''  # italic=1/underline=1 은 FFmpeg 4.x 미지원
     extra  = ''
 
     if start_sec is not None or end_sec is not None:
